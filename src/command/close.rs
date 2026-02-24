@@ -17,29 +17,27 @@ pub fn run(name: Option<&str>) -> Result<()> {
     // from the worktree directory name, find_worktree resolves through both handle
     // and branch lookups, then we extract the true handle from the path basename.
     let resolved_handle = match name {
-        Some(n) => {
-            let (path, _branch) = git::find_worktree(n).map_err(|_| {
-                anyhow!(
-                    "Worktree '{}' not found. Use 'workmux list' to see available worktrees.",
-                    n
-                )
-            })?;
-            path.file_name()
+        Some(n) => match git::find_worktree(n) {
+            Ok((path, _branch)) => path
+                .file_name()
                 .ok_or_else(|| anyhow!("Invalid worktree path: no directory name"))?
                 .to_string_lossy()
-                .to_string()
-        }
+                .to_string(),
+            // General (non-git) session: use the name directly as the handle.
+            Err(_) => n.to_string(),
+        },
         None => super::resolve_name(None)?,
     };
 
-    // Determine if this worktree was created as a session or window
+    // Determine if this worktree was created as a session or window.
+    // Fall back to config default for general (non-git) sessions.
     let mode = git::get_worktree_mode(&resolved_handle);
 
     // When no name is provided, prefer the current window/session name
     // This handles duplicate windows/sessions (e.g., wm:feature-2) correctly
     let (full_target_name, is_current_target) = match name {
         Some(_) => {
-            // Explicit name provided - worktree already validated above
+            // Explicit name provided - already resolved above (git worktree or general session)
             let target = MuxHandle::new(mux.as_ref(), mode, prefix, &resolved_handle);
             let full = target.full_name();
             let current = target.current_name()?;

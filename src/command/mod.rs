@@ -26,6 +26,7 @@ pub mod set_base;
 pub mod set_window_status;
 pub mod setup;
 pub mod sidebar;
+pub mod start;
 pub mod status;
 pub mod sync_files;
 pub mod update;

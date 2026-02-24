@@ -380,6 +380,32 @@ enum Commands {
         config: Option<PathBuf>,
     },
 
+    /// Create a tmux window or session for Claude Code (no git repo required)
+    Start {
+        /// Display name for the window/session (e.g. "myproject")
+        name: String,
+
+        /// Working directory (defaults to current directory)
+        #[arg(long, short = 'd')]
+        dir: Option<std::path::PathBuf>,
+
+        /// Create as its own tmux session instead of a window in the current session
+        #[arg(long, short = 's')]
+        session: bool,
+
+        /// Agent command to use (overrides config)
+        #[arg(long, short = 'a')]
+        agent: Option<String>,
+
+        /// Skip running pane commands (agent and shell splits)
+        #[arg(long)]
+        no_pane_cmds: bool,
+
+        /// Open in background (do not switch to the new window/session)
+        #[arg(long, short = 'b')]
+        background: bool,
+    },
+
     /// Open a tmux window for an existing worktree
     Open {
         /// Worktree name(s) (directory name, visible in tmux window). Optional with --new.
@@ -818,7 +844,11 @@ enum ClaudeCommands {
 fn should_prompt_nerdfont(cmd: &Commands) -> bool {
     matches!(
         cmd,
-        Commands::Add { .. } | Commands::Init | Commands::Dashboard { .. } | Commands::List { .. }
+        Commands::Add { .. }
+            | Commands::Start { .. }
+            | Commands::Init
+            | Commands::Dashboard { .. }
+            | Commands::List { .. }
     )
 }
 
@@ -828,7 +858,7 @@ fn should_prompt_nerdfont(cmd: &Commands) -> bool {
 fn should_prompt_status_setup(cmd: &Commands) -> bool {
     matches!(
         cmd,
-        Commands::Add { .. } | Commands::Init | Commands::List { .. }
+        Commands::Add { .. } | Commands::Start { .. } | Commands::Init | Commands::List { .. }
     )
 }
 
@@ -951,6 +981,14 @@ pub fn run() -> Result<()> {
                 config.as_deref(),
             )
         }
+        Commands::Start {
+            name,
+            dir,
+            session,
+            agent,
+            no_pane_cmds,
+            background,
+        } => command::start::run(&name, dir, session, agent.as_deref(), no_pane_cmds, background),
         Commands::Open {
             names,
             run_hooks,
