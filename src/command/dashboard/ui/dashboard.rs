@@ -127,6 +127,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     let mut header_cells = vec![
         Cell::from("#").style(header_style),
         Cell::from("Project").style(header_style),
+        Cell::from("Repo").style(header_style),
         Cell::from("Worktree").style(header_style),
         Cell::from(git_header),
     ];
@@ -184,6 +185,10 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
             };
 
             let project = App::extract_project_name(agent);
+            let repo = app
+                .get_repo_root_for_agent(agent)
+                .and_then(|r| r.file_name().map(|n| n.to_string_lossy().to_string()))
+                .unwrap_or_default();
             let (worktree_name, is_main) = app.extract_worktree_name(agent);
             // Check if this agent corresponds to the current working directory.
             // Try canonicalized comparison first (handles symlinks), fall back to direct comparison.
@@ -225,6 +230,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
             (
                 jump_key,
                 project,
+                repo,
                 worktree_display,
                 is_main,
                 is_current,
@@ -241,17 +247,30 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     // Calculate max project name width (with padding, capped)
     let max_project_width = row_data
         .iter()
-        .map(|(_, project, _, _, _, _, _, _, _, _, _)| project.len())
+        .map(|(_, project, _, _, _, _, _, _, _, _, _, _)| project.len())
         .max()
         .unwrap_or(5)
         .clamp(5, 20) // min 5, max 20
         + 2; // padding
 
+    // Calculate max repo name width (with padding, capped)
+    let max_repo_width = row_data
+        .iter()
+        .map(|(_, _, repo, _, _, _, _, _, _, _, _, _)| repo.len())
+        .max()
+        .unwrap_or(0)
+        .clamp(0, 20) // min 0 (hide when blank), max 20
+        + if row_data.iter().any(|(_, _, repo, _, _, _, _, _, _, _, _, _)| !repo.is_empty()) {
+            1 // padding only when any row has a repo name
+        } else {
+            0
+        };
+
     // Calculate max worktree name width (with padding)
     // Use at least 8 to fit the "Worktree" header
     let max_worktree_width = row_data
         .iter()
-        .map(|(_, _, worktree_display, _, _, _, _, _, _, _, _)| worktree_display.len())
+        .map(|(_, _, _, worktree_display, _, _, _, _, _, _, _, _)| worktree_display.len())
         .max()
         .unwrap_or(8)
         .max(8) // min 8 (header width)
@@ -261,7 +280,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     // Use chars().count() instead of len() because Nerd Font icons are multi-byte
     let max_git_width = row_data
         .iter()
-        .map(|(_, _, _, _, _, git_spans, _, _, _, _, _)| {
+        .map(|(_, _, _, _, _, _, git_spans, _, _, _, _, _)| {
             git_spans
                 .iter()
                 .map(|(text, _)| text.chars().count())
@@ -276,7 +295,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     let max_pr_width = if show_pr_column {
         row_data
             .iter()
-            .filter_map(|(_, _, _, _, _, _, pr_spans, _, _, _, _)| pr_spans.as_ref())
+            .filter_map(|(_, _, _, _, _, _, _, pr_spans, _, _, _, _)| pr_spans.as_ref())
             .map(|spans| {
                 spans
                     .iter()
@@ -297,6 +316,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
             |(
                 jump_key,
                 project,
+                repo,
                 worktree_display,
                 is_main,
                 is_current,
@@ -325,6 +345,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
                 let mut cells = vec![
                     Cell::from(jump_key).style(Style::default().fg(Color::Yellow)),
                     Cell::from(project),
+                    Cell::from(repo).style(Style::default().fg(Color::DarkGray)),
                     Cell::from(worktree_display).style(worktree_style),
                     Cell::from(git_line),
                 ];
@@ -361,6 +382,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     let mut constraints = vec![
         Constraint::Length(2),                         // #: jump key
         Constraint::Length(max_project_width as u16),  // Project: auto-sized
+        Constraint::Length(max_repo_width as u16),     // Repo: auto-sized (blank for general sessions)
         Constraint::Length(max_worktree_width as u16), // Worktree: auto-sized
         Constraint::Length(max_git_width as u16),      // Git: auto-sized
     ];

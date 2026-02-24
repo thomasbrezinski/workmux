@@ -14,25 +14,30 @@ pub fn run(name: Option<&str>) -> Result<()> {
         None => super::resolve_name(None)?,
     };
 
-    // Determine if this worktree was created as a session or window
+    // Determine if this worktree was created as a session or window.
+    // Fall back to config default for general (non-git) sessions.
     let mode = git::get_worktree_mode(&resolved_handle);
 
     // When no name is provided, prefer the current window/session name
     // This handles duplicate windows/sessions (e.g., wm:feature-2) correctly
     let (full_target_name, is_current_target) = match name {
         Some(handle) => {
-            // Explicit name provided - validate the worktree exists
-            git::find_worktree(handle).with_context(|| {
-                format!(
-                    "No worktree found with name '{}'. Use 'workmux list' to see available worktrees.",
-                    handle
-                )
-            })?;
-            let target = MuxHandle::new(mux.as_ref(), mode, prefix, handle);
-            let full = target.full_name();
-            let current = target.current_name()?;
-            let is_current = current.as_deref() == Some(full.as_str());
-            (full, is_current)
+            // Check if this is a git worktree first; if not, treat as general session.
+            let is_git_worktree = git::find_worktree(handle).is_ok();
+            if !is_git_worktree {
+                // General session: just look for the mux window/session by prefixed name
+                let target = MuxHandle::new(mux.as_ref(), mode, prefix, handle);
+                let full = target.full_name();
+                let current = target.current_name()?;
+                let is_current = current.as_deref() == Some(full.as_str());
+                (full, is_current)
+            } else {
+                let target = MuxHandle::new(mux.as_ref(), mode, prefix, handle);
+                let full = target.full_name();
+                let current = target.current_name()?;
+                let is_current = current.as_deref() == Some(full.as_str());
+                (full, is_current)
+            }
         }
         None => {
             // No name provided - check if we're in a workmux window/session

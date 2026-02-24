@@ -713,6 +713,11 @@ impl App {
         agent::extract_project_name(&agent_pane.path)
     }
 
+    /// Get the cached repo root for an agent path, if any.
+    pub fn get_repo_root_for_agent(&self, agent: &AgentPane) -> Option<&PathBuf> {
+        self.repo_roots.get(&agent.path)
+    }
+
     /// Get PR info for an agent by looking up its branch in PR statuses
     pub fn get_pr_for_agent(&self, agent: &AgentPane) -> Option<&PrSummary> {
         let repo_root = self.repo_roots.get(&agent.path)?;

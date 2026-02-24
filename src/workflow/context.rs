@@ -82,6 +82,37 @@ impl WorkflowContext {
         })
     }
 
+    /// Create a workflow context for a general (non-git) session.
+    ///
+    /// Skips all git checks. `main_worktree_root` and `git_common_dir` are
+    /// set to `working_dir`. `main_branch` is left empty since it is unused
+    /// for general sessions.
+    pub fn new_general(
+        working_dir: PathBuf,
+        config: config::Config,
+        mux: Arc<dyn Multiplexer>,
+    ) -> Result<Self> {
+        let prefix = config.window_prefix().to_string();
+
+        debug!(
+            working_dir = %working_dir.display(),
+            prefix = %prefix,
+            backend = mux.name(),
+            "workflow_context:created (general)"
+        );
+
+        Ok(Self {
+            main_worktree_root: working_dir.clone(),
+            git_common_dir: working_dir.clone(),
+            main_branch: String::new(),
+            prefix,
+            config,
+            mux,
+            config_rel_dir: PathBuf::new(),
+            config_source_dir: working_dir,
+        })
+    }
+
     /// Ensure the terminal multiplexer is running, returning an error if not
     ///
     /// Call this at the start of workflows that require a multiplexer.

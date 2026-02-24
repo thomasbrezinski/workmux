@@ -1,4 +1,4 @@
-use crate::multiplexer::{create_backend, detect_backend};
+use crate::multiplexer::{MuxHandle, create_backend, detect_backend};
 use crate::workflow::WorkflowContext;
 use crate::{config, git, spinner, workflow};
 use anyhow::{Context, Result, anyhow};
@@ -37,22 +37,32 @@ fn run_specified(names: Vec<String>, force: bool, keep_branch: bool) -> Result<(
 
     // 2. Resolve all targets and validate they exist
     let mut candidates: Vec<(String, PathBuf, String)> = Vec::new();
+    let mut general_handles: Vec<String> = Vec::new();
     for name in resolved_names {
-        let (worktree_path, branch_name) = git::find_worktree(&name)
-            .with_context(|| format!("No worktree found with name '{}'", name))?;
+        match git::find_worktree(&name) {
+            Ok((worktree_path, branch_name)) => {
+                let handle = worktree_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "Could not derive handle from worktree path: {:?}",
+                            worktree_path
+                        )
+                    })?
+                    .to_string();
+                candidates.push((handle, worktree_path, branch_name));
+            }
+            Err(_) => {
+                // Not a git worktree — treat as a general session (kill mux window only)
+                general_handles.push(name);
+            }
+        }
+    }
 
-        let handle = worktree_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .ok_or_else(|| {
-                anyhow!(
-                    "Could not derive handle from worktree path: {:?}",
-                    worktree_path
-                )
-            })?
-            .to_string();
-
-        candidates.push((handle, worktree_path, branch_name));
+    // Handle general sessions immediately (just kill the mux window/session)
+    for handle in general_handles {
+        remove_general_session(&handle)?;
     }
 
     // 3. If forced, skip all checks and remove
@@ -447,11 +457,19 @@ fn run_gone(force: bool, keep_branch: bool) -> Result<()> {
     Ok(())
 }
 
-/// Execute the actual worktree removal
+/// Execute the actual worktree removal (git worktrees only)
 fn remove_worktree(handle: &str, force: bool, keep_branch: bool) -> Result<()> {
     let config = config::Config::load(None)?;
     let mux = create_backend(detect_backend());
-    let context = WorkflowContext::new(config, mux, None)?;
+
+    // Try git context; if not in a git repo, fall back to general session removal.
+    let context = match WorkflowContext::new(config.clone(), mux.clone(), None) {
+        Ok(ctx) => ctx,
+        Err(_) => {
+            // Not in a git repo — treat as general session
+            return remove_general_session(handle);
+        }
+    };
 
     super::announce_hooks(&context.config, None, super::HookPhase::PreRemove);
 
@@ -471,4 +489,31 @@ fn remove_worktree(handle: &str, force: bool, keep_branch: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Kill the tmux window/session for a general (non-git) session.
+/// No worktree or branch to clean up — just kill the mux target.
+fn remove_general_session(handle: &str) -> Result<()> {
+    let config = config::Config::load(None)?;
+    let mux = create_backend(detect_backend());
+    let prefix = config.window_prefix();
+
+    // Try both window and session modes
+    for mode in [crate::config::MuxMode::Window, crate::config::MuxMode::Session] {
+        let target = MuxHandle::new(mux.as_ref(), mode, prefix, handle);
+        let full_name = target.full_name();
+        if MuxHandle::exists_full(mux.as_ref(), mode, &full_name)? {
+            MuxHandle::kill_full(mux.as_ref(), mode, &full_name)
+                .context("Failed to close general session")?;
+            println!("✓ Closed {} '{}'", target.kind(), full_name);
+            return Ok(());
+        }
+    }
+
+    Err(anyhow!(
+        "No active tmux window or session found for '{}{}'. \
+         Use 'workmux list' to see active worktree sessions.",
+        prefix,
+        handle
+    ))
 }

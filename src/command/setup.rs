@@ -1,6 +1,7 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use console::style;
 use std::io::{self, IsTerminal, Write};
+use std::path::PathBuf;
 
 use crate::agent_setup::{self, StatusCheck};
 
@@ -79,7 +80,83 @@ pub fn run() -> Result<()> {
         println!();
     }
 
+    // Offer to install the dashboard keybinding (Ctrl-b Ctrl-c)
+    offer_dashboard_keybinding()?;
+
     Ok(())
+}
+
+const DASHBOARD_KEYBINDING: &str =
+    r#"bind-key C-c display-popup -E -w 90% -h 90% "workmux dashboard""#;
+
+fn offer_dashboard_keybinding() -> Result<()> {
+    let tmux_conf = tmux_conf_path();
+
+    // Check if already installed
+    if tmux_conf.exists() {
+        let content = std::fs::read_to_string(&tmux_conf)
+            .context("Failed to read ~/.tmux.conf")?;
+        if content.contains(DASHBOARD_KEYBINDING) {
+            println!(
+                "  {} Dashboard keybinding (Ctrl-b Ctrl-c) already installed",
+                style("✓").green()
+            );
+            return Ok(());
+        }
+    }
+
+    let prompt = format!(
+        "  Add dashboard keybinding (Ctrl-b Ctrl-c) to {}? {}{}{} ",
+        tmux_conf.display(),
+        style("[").bold().cyan(),
+        style("Y/n").bold(),
+        style("]").bold().cyan(),
+    );
+
+    print!("{}", prompt);
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let answer = input.trim().to_lowercase();
+
+    match answer.as_str() {
+        "" | "y" | "yes" => {
+            // Append keybinding to ~/.tmux.conf
+            let line = format!("\n# workmux: open dashboard popup\n{}\n", DASHBOARD_KEYBINDING);
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&tmux_conf)
+                .and_then(|mut f| {
+                    use io::Write;
+                    f.write_all(line.as_bytes())
+                })
+                .with_context(|| {
+                    format!("Failed to write to {}", tmux_conf.display())
+                })?;
+            println!(
+                "  {} Dashboard keybinding added to {}",
+                style("✓").green(),
+                tmux_conf.display()
+            );
+            println!(
+                "    {}",
+                style("Reload tmux config with: tmux source ~/.tmux.conf").dim()
+            );
+        }
+        _ => {
+            println!("  {} Skipped dashboard keybinding", style("·").dim());
+        }
+    }
+
+    Ok(())
+}
+
+fn tmux_conf_path() -> PathBuf {
+    std::env::var("HOME")
+        .map(|h| PathBuf::from(h).join(".tmux.conf"))
+        .unwrap_or_else(|_| PathBuf::from("~/.tmux.conf"))
 }
 
 fn confirm_install() -> Result<bool> {

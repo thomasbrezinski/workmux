@@ -374,6 +374,77 @@ pub fn create(context: &WorkflowContext, args: CreateArgs) -> Result<CreateResul
     Ok(result)
 }
 
+/// Create a tmux window/session for a general (non-git) directory.
+///
+/// Unlike `create`, this function skips all git operations: no branch creation,
+/// no worktree registration, no git config writes. The directory must already exist.
+/// `options.run_hooks` and `options.run_file_ops` must be false (caller's responsibility).
+pub fn create_general_session(
+    name: &str,
+    working_dir: &Path,
+    context: &WorkflowContext,
+    options: super::types::SetupOptions,
+    agent: Option<&str>,
+) -> Result<super::types::CreateResult> {
+    use crate::multiplexer::MuxHandle;
+
+    info!(name = name, path = %working_dir.display(), "create_general_session:start");
+
+    // Validate layout config
+    if context.config.panes.is_some() && context.config.windows.is_some() {
+        anyhow::bail!("Cannot specify both 'panes' and 'windows' in configuration.");
+    }
+    if let Some(windows) = &context.config.windows {
+        if options.mode != crate::config::MuxMode::Session {
+            anyhow::bail!(
+                "'windows' configuration requires 'mode: session'. \
+                 Either add 'mode: session' to your config or use --session flag."
+            );
+        }
+        crate::config::validate_windows_config(windows)?;
+    }
+
+    context.ensure_mux_running()?;
+
+    if options.mode == crate::config::MuxMode::Session && context.mux.name() != "tmux" {
+        return Err(anyhow::anyhow!(
+            "Session mode (--session) is only supported with tmux.\n\
+             Current backend: {}. Use window mode instead.",
+            context.mux.name()
+        ));
+    }
+
+    // Check if a window/session with this name already exists
+    let target = MuxHandle::new(
+        context.mux.as_ref(),
+        options.mode,
+        &context.prefix,
+        name,
+    );
+    if target.exists()? {
+        return Err(anyhow::anyhow!(
+            "A {} {} named '{}' already exists",
+            context.mux.name(),
+            target.kind(),
+            target.full_name()
+        ));
+    }
+
+    let mut result = setup::setup_environment(
+        context.mux.as_ref(),
+        name,
+        name,
+        working_dir,
+        &context.config,
+        &options,
+        agent,
+        None,
+    )?;
+    result.branch_name = name.to_string();
+    info!(name = name, "create_general_session:completed");
+    Ok(result)
+}
+
 /// Create a new worktree and move uncommitted changes from the current worktree into it.
 pub fn create_with_changes(
     branch_name: &str,
