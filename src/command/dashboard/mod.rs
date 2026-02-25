@@ -62,6 +62,8 @@ fn get_context(app: &App) -> Context {
         ViewMode::Dashboard => {
             if app.input_mode {
                 Context::DashboardInput
+            } else if app.confirm_remove.is_some() {
+                Context::DashboardConfirm
             } else {
                 Context::DashboardNormal
             }

@@ -3,10 +3,10 @@
 use ansi_to_tui::IntoText;
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
+    layout::{Alignment, Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Cell, Paragraph, Row, Table},
+    widgets::{Block, BorderType, Cell, Clear, Paragraph, Row, Table},
 };
 use std::collections::{BTreeMap, HashSet};
 
@@ -80,6 +80,10 @@ pub fn render_dashboard(f: &mut Frame, app: &mut App) {
             Span::raw(" commit  "),
             Span::styled("[m]", Style::default().fg(Color::Yellow)),
             Span::raw(" merge  "),
+            Span::styled("[x]", Style::default().fg(Color::Red)),
+            Span::raw(" close  "),
+            Span::styled("[r]", Style::default().fg(Color::Red)),
+            Span::raw(" remove  "),
             Span::styled("[Enter]", Style::default().fg(Color::Cyan)),
             Span::raw(" go  "),
             Span::styled("[q]", Style::default().fg(Color::Cyan)),
@@ -126,9 +130,8 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     let header_style = Style::default().fg(Color::Cyan).bold();
     let mut header_cells = vec![
         Cell::from("#").style(header_style),
-        Cell::from("Project").style(header_style),
-        Cell::from("Repo").style(header_style),
         Cell::from("Worktree").style(header_style),
+        Cell::from("Project").style(header_style),
         Cell::from(git_header),
     ];
 
@@ -185,10 +188,6 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
             };
 
             let project = App::extract_project_name(agent);
-            let repo = app
-                .get_repo_root_for_agent(agent)
-                .and_then(|r| r.file_name().map(|n| n.to_string_lossy().to_string()))
-                .unwrap_or_default();
             let (worktree_name, is_main) = app.extract_worktree_name(agent);
             // Check if this agent corresponds to the current working directory.
             // Try canonicalized comparison first (handles symlinks), fall back to direct comparison.
@@ -229,9 +228,8 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
 
             (
                 jump_key,
-                project,
-                repo,
                 worktree_display,
+                project,
                 is_main,
                 is_current,
                 git_spans,
@@ -244,43 +242,30 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
         })
         .collect();
 
-    // Calculate max project name width (with padding, capped)
-    let max_project_width = row_data
-        .iter()
-        .map(|(_, project, _, _, _, _, _, _, _, _, _, _)| project.len())
-        .max()
-        .unwrap_or(5)
-        .clamp(5, 20) // min 5, max 20
-        + 2; // padding
-
-    // Calculate max repo name width (with padding, capped)
-    let max_repo_width = row_data
-        .iter()
-        .map(|(_, _, repo, _, _, _, _, _, _, _, _, _)| repo.len())
-        .max()
-        .unwrap_or(0)
-        .clamp(0, 20) // min 0 (hide when blank), max 20
-        + if row_data.iter().any(|(_, _, repo, _, _, _, _, _, _, _, _, _)| !repo.is_empty()) {
-            1 // padding only when any row has a repo name
-        } else {
-            0
-        };
-
     // Calculate max worktree name width (with padding)
     // Use at least 8 to fit the "Worktree" header
     let max_worktree_width = row_data
         .iter()
-        .map(|(_, _, _, worktree_display, _, _, _, _, _, _, _, _)| worktree_display.len())
+        .map(|(_, worktree_display, _, _, _, _, _, _, _, _, _)| worktree_display.len())
         .max()
         .unwrap_or(8)
         .max(8) // min 8 (header width)
         + 1; // padding
 
+    // Calculate max project name width (with padding, capped)
+    let max_project_width = row_data
+        .iter()
+        .map(|(_, _, project, _, _, _, _, _, _, _, _)| project.len())
+        .max()
+        .unwrap_or(5)
+        .clamp(5, 20) // min 5, max 20
+        + 2; // padding
+
     // Calculate max git status width (sum of all span character counts)
     // Use chars().count() instead of len() because Nerd Font icons are multi-byte
     let max_git_width = row_data
         .iter()
-        .map(|(_, _, _, _, _, _, git_spans, _, _, _, _, _)| {
+        .map(|(_, _, _, _, _, git_spans, _, _, _, _, _)| {
             git_spans
                 .iter()
                 .map(|(text, _)| text.chars().count())
@@ -295,7 +280,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     let max_pr_width = if show_pr_column {
         row_data
             .iter()
-            .filter_map(|(_, _, _, _, _, _, _, pr_spans, _, _, _, _)| pr_spans.as_ref())
+            .filter_map(|(_, _, _, _, _, _, pr_spans, _, _, _, _)| pr_spans.as_ref())
             .map(|spans| {
                 spans
                     .iter()
@@ -315,9 +300,8 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
         .map(
             |(
                 jump_key,
-                project,
-                repo,
                 worktree_display,
+                project,
                 is_main,
                 is_current,
                 git_spans,
@@ -344,9 +328,8 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
 
                 let mut cells = vec![
                     Cell::from(jump_key).style(Style::default().fg(Color::Yellow)),
-                    Cell::from(project),
-                    Cell::from(repo).style(Style::default().fg(Color::DarkGray)),
                     Cell::from(worktree_display).style(worktree_style),
+                    Cell::from(project),
                     Cell::from(git_line),
                 ];
 
@@ -381,9 +364,8 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     // Build column constraints conditionally based on whether PR column is shown
     let mut constraints = vec![
         Constraint::Length(2),                         // #: jump key
-        Constraint::Length(max_project_width as u16),  // Project: auto-sized
-        Constraint::Length(max_repo_width as u16),     // Repo: auto-sized (blank for general sessions)
         Constraint::Length(max_worktree_width as u16), // Worktree: auto-sized
+        Constraint::Length(max_project_width as u16),  // Project: auto-sized
         Constraint::Length(max_git_width as u16),      // Git: auto-sized
     ];
 
@@ -404,6 +386,45 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
         .highlight_symbol("> ");
 
     f.render_stateful_widget(table, area, &mut app.table_state);
+}
+
+/// Render the remove confirmation modal overlay.
+pub fn render_confirm_modal(f: &mut Frame, app: &App) {
+    let Some(ref window_name) = app.confirm_remove else {
+        return;
+    };
+
+    let prefix = app.config.window_prefix();
+    let handle = window_name.strip_prefix(prefix).unwrap_or(window_name);
+    let body = "Kill window and remove git worktree? [y] confirm  [any] cancel";
+
+    let width = (body.len() as u16 + 4).min(f.area().width);
+    let height = 5u16;
+    let area = f.area();
+    let popup_area = Rect {
+        x: area.width.saturating_sub(width) / 2,
+        y: area.height.saturating_sub(height) / 2,
+        width: width.min(area.width),
+        height: height.min(area.height),
+    };
+
+    let block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Red))
+        .title(Line::from(Span::styled(
+            format!(" Remove {} ", handle),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )));
+
+    let paragraph = Paragraph::new(Line::from(Span::styled(
+        body,
+        Style::default().fg(Color::White),
+    )))
+    .block(block)
+    .alignment(Alignment::Center);
+
+    f.render_widget(Clear, popup_area);
+    f.render_widget(paragraph, popup_area);
 }
 
 fn render_preview(f: &mut Frame, app: &mut App, area: Rect) {

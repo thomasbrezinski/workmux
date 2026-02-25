@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(which workmux && workmux --version 2>&1)",
+      "Bash(tmux list-sessions:*)",
+      "Bash(cargo build:*)",
+      "Bash(tail:*)",
+      "Bash(find:*)",
+      "Bash(head:*)",
+      "Bash(wc:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo install:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

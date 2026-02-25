@@ -101,6 +101,8 @@ pub struct App {
     last_pane_id: Option<String>,
     /// Color palette based on the configured theme
     pub palette: ThemePalette,
+    /// Pending removal confirmation: window_name of the session to be removed
+    pub confirm_remove: Option<String>,
 }
 
 impl App {
@@ -166,6 +168,7 @@ impl App {
             preview_size,
             last_pane_id,
             palette,
+            confirm_remove: None,
         };
 
         app.refresh();
@@ -187,6 +190,30 @@ impl App {
         self.agents = StateStore::new()
             .and_then(|store| store.load_reconciled_agents(self.mux.as_ref()))
             .unwrap_or_default();
+
+        // Also show wm-* windows that have no StateStore entry yet (e.g., newly created sessions
+        // where Claude hasn't reported status). One synthetic entry per uncovered window.
+        let prefix = self.config.window_prefix();
+        if let Ok(live_panes) = self.mux.get_all_live_pane_info() {
+            let covered_windows: std::collections::HashSet<&str> =
+                self.agents.iter().map(|a| a.window_name.as_str()).collect();
+            let mut seen_windows: std::collections::HashSet<String> =
+                covered_windows.iter().map(|s| s.to_string()).collect();
+            for (pane_id, info) in live_panes {
+                let window_name = info.window.as_deref().unwrap_or("");
+                if window_name.starts_with(prefix) && seen_windows.insert(window_name.to_string()) {
+                    self.agents.push(crate::multiplexer::AgentPane {
+                        session: info.session.unwrap_or_default(),
+                        window_name: window_name.to_string(),
+                        pane_id,
+                        path: info.working_dir,
+                        pane_title: info.title,
+                        status: None,
+                        status_ts: None,
+                    });
+                }
+            }
+        }
 
         self.sort_agents();
 
@@ -713,11 +740,6 @@ impl App {
         agent::extract_project_name(&agent_pane.path)
     }
 
-    /// Get the cached repo root for an agent path, if any.
-    pub fn get_repo_root_for_agent(&self, agent: &AgentPane) -> Option<&PathBuf> {
-        self.repo_roots.get(&agent.path)
-    }
-
     /// Get PR info for an agent by looking up its branch in PR statuses
     pub fn get_pr_for_agent(&self, agent: &AgentPane) -> Option<&PrSummary> {
         let repo_root = self.repo_roots.get(&agent.path)?;
@@ -745,5 +767,67 @@ impl App {
     /// Get PR statuses for caching
     pub fn pr_statuses(&self) -> &HashMap<PathBuf, HashMap<String, PrSummary>> {
         &self.pr_statuses
+    }
+
+    /// Kill the selected agent's window, preserving the git worktree and branch.
+    pub fn close_selected(&mut self) {
+        if let Some(selected) = self.table_state.selected()
+            && let Some(agent) = self.agents.get(selected)
+        {
+            let window_name = agent.window_name.clone();
+            let _ = self.mux.kill_window(&window_name);
+            self.refresh();
+        }
+    }
+
+    /// Begin the remove confirmation flow for the selected agent.
+    pub fn begin_remove_selected(&mut self) {
+        if let Some(selected) = self.table_state.selected()
+            && let Some(agent) = self.agents.get(selected)
+        {
+            self.confirm_remove = Some(agent.window_name.clone());
+        }
+    }
+
+    /// Execute the confirmed removal: full worktree cleanup for git sessions,
+    /// window-kill only for general sessions.
+    pub fn execute_remove(&mut self) {
+        let Some(window_name) = self.confirm_remove.take() else {
+            return;
+        };
+
+        let agent_path = self
+            .agents
+            .iter()
+            .find(|a| a.window_name == window_name)
+            .map(|a| a.path.clone());
+
+        let prefix = self.config.window_prefix();
+        let handle = window_name
+            .strip_prefix(prefix)
+            .unwrap_or(&window_name)
+            .to_string();
+
+        let is_git_session = agent_path
+            .as_ref()
+            .is_some_and(|p| self.repo_roots.contains_key(p));
+
+        if is_git_session {
+            if let Some(path) = agent_path {
+                let _ = std::process::Command::new("workmux")
+                    .args(["remove", "--keep-branch", &handle])
+                    .current_dir(&path)
+                    .output();
+            }
+        } else {
+            let _ = self.mux.kill_window(&window_name);
+        }
+
+        self.refresh();
+    }
+
+    /// Cancel any pending confirmation.
+    pub fn cancel_confirm(&mut self) {
+        self.confirm_remove = None;
     }
 }

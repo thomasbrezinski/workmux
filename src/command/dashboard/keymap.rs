@@ -9,6 +9,7 @@ use super::actions::Action;
 pub enum Context {
     DashboardNormal,
     DashboardInput,
+    DashboardConfirm,
     DiffNormal,
     Patch,
     Comment,
@@ -19,6 +20,7 @@ pub fn action_for_key(ctx: Context, key: KeyEvent) -> Option<Action> {
     match ctx {
         Context::DashboardNormal => dashboard_normal_key(key),
         Context::DashboardInput => dashboard_input_key(key),
+        Context::DashboardConfirm => dashboard_confirm_key(key),
         Context::DiffNormal => diff_normal_key(key),
         Context::Patch => patch_key(key),
         Context::Comment => comment_key(key),
@@ -53,8 +55,17 @@ fn dashboard_normal_key(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('d') => Some(Action::LoadWipDiff),
         KeyCode::Char('c') => Some(Action::SendCommitDashboard),
         KeyCode::Char('m') => Some(Action::TriggerMergeDashboard),
+        KeyCode::Char('x') => Some(Action::CloseSelected),
+        KeyCode::Char('r') => Some(Action::BeginRemoveSelected),
         KeyCode::Char(c @ '1'..='9') => Some(Action::JumpToIndex((c as u8 - b'1') as usize)),
         _ => None,
+    }
+}
+
+fn dashboard_confirm_key(key: KeyEvent) -> Option<Action> {
+    match key.code {
+        KeyCode::Char('y') => Some(Action::ExecuteConfirmedRemove),
+        _ => Some(Action::CancelConfirm),
     }
 }
 
@@ -148,9 +159,12 @@ pub fn help_rows(ctx: Context) -> Vec<(&'static str, &'static str)> {
             ("d", "View diff"),
             ("c", "Commit changes"),
             ("m", "Merge branch"),
+            ("x", "Close window"),
+            ("r", "Remove worktree"),
             ("1-9", "Quick jump"),
         ],
         Context::DashboardInput => vec![("Esc", "Exit input mode"), ("<keys>", "Send to agent")],
+        Context::DashboardConfirm => vec![("y", "Confirm remove"), ("any", "Cancel")],
         Context::DiffNormal => vec![
             ("?", "Show help"),
             ("q/Esc", "Close diff"),
@@ -190,6 +204,7 @@ mod tests {
     fn test_each_context_has_help_rows() {
         assert!(!help_rows(Context::DashboardNormal).is_empty());
         assert!(!help_rows(Context::DashboardInput).is_empty());
+        assert!(!help_rows(Context::DashboardConfirm).is_empty());
         assert!(!help_rows(Context::DiffNormal).is_empty());
         assert!(!help_rows(Context::Patch).is_empty());
         assert!(!help_rows(Context::Comment).is_empty());
@@ -200,6 +215,7 @@ mod tests {
         for ctx in [
             Context::DashboardNormal,
             Context::DashboardInput,
+            Context::DashboardConfirm,
             Context::DiffNormal,
             Context::Patch,
             Context::Comment,
@@ -257,6 +273,26 @@ mod tests {
         assert_eq!(
             action_for_key(Context::Patch, y),
             Some(Action::StageAndNext)
+        );
+    }
+
+    #[test]
+    fn test_confirm_context_keys() {
+        let y = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE);
+        let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        let n = KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE);
+
+        assert_eq!(
+            action_for_key(Context::DashboardConfirm, y),
+            Some(Action::ExecuteConfirmedRemove)
+        );
+        assert_eq!(
+            action_for_key(Context::DashboardConfirm, esc),
+            Some(Action::CancelConfirm)
+        );
+        assert_eq!(
+            action_for_key(Context::DashboardConfirm, n),
+            Some(Action::CancelConfirm)
         );
     }
 }

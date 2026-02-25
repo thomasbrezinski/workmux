@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -57,24 +57,7 @@ pub fn list(
     fetch_pr_status: bool,
     filter: &[String],
 ) -> Result<Vec<WorktreeInfo>> {
-    if !git::is_git_repo()? {
-        return Err(anyhow!("Not in a git repository"));
-    }
-
-    let worktrees_data = git::list_worktrees()?;
-
-    if worktrees_data.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    // Apply filter early before expensive operations
-    let worktrees_data = filter_worktrees(worktrees_data, filter);
-
-    if worktrees_data.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    // Check mux status and get all windows/sessions once to avoid repeated process calls
+    // Check mux status first — needed for both git worktrees and general sessions
     let mux_running = mux.is_running().unwrap_or(false);
     let mux_windows: HashSet<String> = if mux_running {
         mux.get_all_window_names().unwrap_or_default()
@@ -87,27 +70,7 @@ pub fn list(
         HashSet::new()
     };
 
-    // Get the main branch for unmerged checks
-    let main_branch = git::get_default_branch().ok();
-
-    // Get all unmerged branches in one go for efficiency
-    // Prefer checking against remote tracking branch for more accurate results
-    let unmerged_branches = main_branch
-        .as_deref()
-        .and_then(|main| git::get_merge_base(main).ok())
-        .and_then(|base| git::get_unmerged_branches(&base).ok())
-        .unwrap_or_default(); // Use an empty set on failure
-
-    // Batch fetch all PRs if requested (single API call)
-    let pr_map = if fetch_pr_status {
-        spinner::with_spinner("Fetching PR status", || {
-            Ok(github::list_prs().unwrap_or_default())
-        })?
-    } else {
-        std::collections::HashMap::new()
-    };
-
-    // Load reconciled agent states (only if multiplexer is running)
+    // Load reconciled agent states (needed for both git worktrees and general sessions)
     let agent_panes = if mux_running {
         StateStore::new()
             .ok()
@@ -123,76 +86,127 @@ pub fn list(
         .map(|a| (canon_or_self(&a.path), a.status))
         .collect();
 
-    // Batch-load all worktree modes in a single git config call
-    let worktree_modes = git::get_all_worktree_modes();
-
     let prefix = config.window_prefix();
-    let worktrees: Vec<WorktreeInfo> = worktrees_data
-        .into_iter()
-        .map(|(path, branch)| {
-            // Extract handle from worktree path basename (the source of truth)
-            let handle = path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or(&branch)
-                .to_string();
+    let mut worktrees: Vec<WorktreeInfo> = Vec::new();
 
-            // Check if mux target exists (window or session based on stored mode)
-            let prefixed_name = util::prefixed(prefix, &handle);
-            let mode = worktree_modes
-                .get(&handle)
-                .copied()
-                .unwrap_or(MuxMode::Window);
-            let has_mux_window = if mode == MuxMode::Session {
-                mux_sessions.contains(&prefixed_name)
+    // Git worktree section — only runs when inside a git repository
+    if git::is_git_repo()? {
+        let worktrees_data = filter_worktrees(git::list_worktrees()?, filter);
+
+        if !worktrees_data.is_empty() {
+            let main_branch = git::get_default_branch().ok();
+            let unmerged_branches = main_branch
+                .as_deref()
+                .and_then(|main| git::get_merge_base(main).ok())
+                .and_then(|base| git::get_unmerged_branches(&base).ok())
+                .unwrap_or_default();
+
+            let pr_map = if fetch_pr_status {
+                spinner::with_spinner("Fetching PR status", || {
+                    Ok(github::list_prs().unwrap_or_default())
+                })?
             } else {
-                mux_windows.contains(&prefixed_name)
+                std::collections::HashMap::new()
             };
 
-            // Check for unmerged commits, but only if this isn't the main branch
-            let has_unmerged = if let Some(ref main) = main_branch {
-                if branch == *main || branch == "(detached)" {
-                    false
+            let worktree_modes = git::get_all_worktree_modes();
+
+            for (path, branch) in worktrees_data {
+                let handle = path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(&branch)
+                    .to_string();
+
+                let prefixed_name = util::prefixed(prefix, &handle);
+                let mode = worktree_modes
+                    .get(&handle)
+                    .copied()
+                    .unwrap_or(MuxMode::Window);
+                let has_mux_window = if mode == MuxMode::Session {
+                    mux_sessions.contains(&prefixed_name)
                 } else {
-                    unmerged_branches.contains(&branch)
-                }
-            } else {
-                false
-            };
+                    mux_windows.contains(&prefixed_name)
+                };
 
-            // Lookup PR info from batch fetch
-            let pr_info = pr_map.get(&branch).cloned();
+                let has_unmerged = if let Some(ref main) = main_branch {
+                    branch != *main && branch != "(detached)" && unmerged_branches.contains(&branch)
+                } else {
+                    false
+                };
 
-            // Match agents to this worktree by comparing canonicalized paths.
-            // An agent's workdir should be within the worktree directory.
-            let canon_wt_path = canon_or_self(&path);
-            let matching_statuses: Vec<_> = agent_panes_canon
-                .iter()
-                .filter(|(canon_agent_path, _)| {
-                    *canon_agent_path == canon_wt_path
-                        || canon_agent_path.starts_with(&canon_wt_path)
-                })
-                .filter_map(|(_, status)| *status)
-                .collect();
+                let pr_info = pr_map.get(&branch).cloned();
 
-            let agent_status = if matching_statuses.is_empty() {
-                None
-            } else {
-                Some(AgentStatusSummary {
-                    statuses: matching_statuses,
-                })
-            };
+                let canon_wt_path = canon_or_self(&path);
+                let matching_statuses: Vec<_> = agent_panes_canon
+                    .iter()
+                    .filter(|(p, _)| *p == canon_wt_path || p.starts_with(&canon_wt_path))
+                    .filter_map(|(_, status)| *status)
+                    .collect();
+                let agent_status = if matching_statuses.is_empty() {
+                    None
+                } else {
+                    Some(AgentStatusSummary { statuses: matching_statuses })
+                };
 
-            WorktreeInfo {
-                branch,
-                path,
-                has_mux_window,
-                has_unmerged,
-                pr_info,
-                agent_status,
+                worktrees.push(WorktreeInfo {
+                    branch,
+                    path,
+                    has_mux_window,
+                    has_unmerged,
+                    pr_info,
+                    agent_status,
+                });
             }
-        })
-        .collect();
+        }
+    }
+
+    // General sessions: scan live panes for wm-* windows not covered by a git worktree
+    if mux_running {
+        let covered_handles: HashSet<String> = worktrees
+            .iter()
+            .map(|wt| {
+                wt.path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(&wt.branch)
+                    .to_string()
+            })
+            .collect();
+
+        if let Ok(live_panes) = mux.get_all_live_pane_info() {
+            let mut seen_windows: HashSet<String> = HashSet::new();
+            for (_pane_id, info) in live_panes {
+                let window_name = info.window.as_deref().unwrap_or("");
+                if let Some(handle) = window_name.strip_prefix(prefix) {
+                    if !covered_handles.contains(handle)
+                        && seen_windows.insert(window_name.to_string())
+                    {
+                        let canon_path = canon_or_self(&info.working_dir);
+                        let matching_statuses: Vec<_> = agent_panes_canon
+                            .iter()
+                            .filter(|(p, _)| *p == canon_path || p.starts_with(&canon_path))
+                            .filter_map(|(_, s)| *s)
+                            .collect();
+                        let agent_status = if matching_statuses.is_empty() {
+                            None
+                        } else {
+                            Some(AgentStatusSummary { statuses: matching_statuses })
+                        };
+
+                        worktrees.push(WorktreeInfo {
+                            branch: handle.to_string(),
+                            path: info.working_dir,
+                            has_mux_window: true,
+                            has_unmerged: false,
+                            pr_info: None,
+                            agent_status,
+                        });
+                    }
+                }
+            }
+        }
+    }
 
     Ok(worktrees)
 }

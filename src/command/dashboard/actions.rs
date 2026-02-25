@@ -31,6 +31,12 @@ pub enum Action {
     SendCommitDashboard,
     TriggerMergeDashboard,
 
+    // Session cleanup
+    CloseSelected,
+    BeginRemoveSelected,
+    ExecuteConfirmedRemove,
+    CancelConfirm,
+
     // Input mode
     SendKey(String),
 
@@ -147,6 +153,24 @@ pub fn apply_action(app: &mut App, action: Action) -> bool {
         }
         Action::TriggerMergeDashboard => {
             app.trigger_merge_for_selected();
+            false
+        }
+
+        // Session cleanup
+        Action::CloseSelected => {
+            app.close_selected();
+            false
+        }
+        Action::BeginRemoveSelected => {
+            app.begin_remove_selected();
+            false
+        }
+        Action::ExecuteConfirmedRemove => {
+            app.execute_remove();
+            false
+        }
+        Action::CancelConfirm => {
+            app.cancel_confirm();
             false
         }
 

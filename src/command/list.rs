@@ -115,7 +115,7 @@ pub fn run(show_pr: bool, filter: &[String]) -> Result<()> {
     let worktrees = workflow::list(&config, mux.as_ref(), show_pr, filter)?;
 
     if worktrees.is_empty() {
-        println!("No worktrees found");
+        println!("No sessions found");
         return Ok(());
     }
 

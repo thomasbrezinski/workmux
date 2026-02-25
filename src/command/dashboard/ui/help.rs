@@ -17,6 +17,8 @@ fn get_help_context(app: &App) -> Context {
         ViewMode::Dashboard => {
             if app.input_mode {
                 Context::DashboardInput
+            } else if app.confirm_remove.is_some() {
+                Context::DashboardConfirm
             } else {
                 Context::DashboardNormal
             }
@@ -40,6 +42,7 @@ fn context_title(ctx: Context) -> &'static str {
     match ctx {
         Context::DashboardNormal => "Dashboard",
         Context::DashboardInput => "Input Mode",
+        Context::DashboardConfirm => "Confirm Remove",
         Context::DiffNormal => "Diff View",
         Context::Patch => "Patch Mode",
         Context::Comment => "Comment",

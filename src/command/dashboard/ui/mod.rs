@@ -10,7 +10,7 @@ use ratatui::Frame;
 
 use super::app::{App, ViewMode};
 
-pub use self::dashboard::render_dashboard;
+pub use self::dashboard::{render_confirm_modal, render_dashboard};
 pub use self::diff::render_diff_view;
 pub use self::help::render_help;
 
@@ -20,6 +20,11 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     match &mut app.view_mode {
         ViewMode::Dashboard => render_dashboard(f, app),
         ViewMode::Diff(diff_view) => render_diff_view(f, diff_view, &app.palette),
+    }
+
+    // Render confirm modal on top if a removal is pending
+    if app.confirm_remove.is_some() {
+        render_confirm_modal(f, app);
     }
 
     // Render help overlay on top if active
