@@ -130,8 +130,8 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     let header_style = Style::default().fg(Color::Cyan).bold();
     let mut header_cells = vec![
         Cell::from("#").style(header_style),
-        Cell::from("Worktree").style(header_style),
         Cell::from("Project").style(header_style),
+        Cell::from("Worktree").style(header_style),
         Cell::from(git_header),
     ];
 
@@ -328,8 +328,8 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
 
                 let mut cells = vec![
                     Cell::from(jump_key).style(Style::default().fg(Color::Yellow)),
-                    Cell::from(worktree_display).style(worktree_style),
                     Cell::from(project),
+                    Cell::from(worktree_display).style(worktree_style),
                     Cell::from(git_line),
                 ];
 
@@ -364,8 +364,8 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     // Build column constraints conditionally based on whether PR column is shown
     let mut constraints = vec![
         Constraint::Length(2),                         // #: jump key
-        Constraint::Length(max_worktree_width as u16), // Worktree: auto-sized
         Constraint::Length(max_project_width as u16),  // Project: auto-sized
+        Constraint::Length(max_worktree_width as u16), // Worktree: auto-sized
         Constraint::Length(max_git_width as u16),      // Git: auto-sized
     ];
 

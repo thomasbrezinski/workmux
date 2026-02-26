@@ -199,7 +199,9 @@ impl App {
                 self.agents.iter().map(|a| a.window_name.as_str()).collect();
             let mut seen_windows: std::collections::HashSet<String> =
                 covered_windows.iter().map(|s| s.to_string()).collect();
-            for (pane_id, info) in live_panes {
+            let mut sorted_panes: Vec<_> = live_panes.into_iter().collect();
+            sorted_panes.sort_by(|(a, _), (b, _)| Self::parse_pane_id(a).cmp(&Self::parse_pane_id(b)));
+            for (pane_id, info) in sorted_panes {
                 let window_name = info.window.as_deref().unwrap_or("");
                 if window_name.starts_with(prefix) && seen_windows.insert(window_name.to_string()) {
                     self.agents.push(crate::multiplexer::AgentPane {
