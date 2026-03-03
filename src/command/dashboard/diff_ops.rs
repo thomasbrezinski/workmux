@@ -30,9 +30,7 @@ pub trait DiffOps {
     fn load_diff(&mut self, branch_diff: bool);
     fn close_diff(&mut self);
     fn send_commit_to_agent(&mut self);
-    fn trigger_merge(&mut self);
     fn send_commit_to_selected(&mut self);
-    fn trigger_merge_for_selected(&mut self);
 }
 
 /// Reload diff showing only unstaged changes (for patch mode).
@@ -512,18 +510,6 @@ impl DiffOps for App {
         self.close_diff();
     }
 
-    /// Send merge action to the agent pane and close diff modal
-    fn trigger_merge(&mut self) {
-        if let ViewMode::Diff(diff) = &self.view_mode {
-            let _ = self.mux.send_keys_to_agent(
-                &diff.pane_id,
-                self.config.dashboard.merge(),
-                self.config.agent.as_deref(),
-            );
-        }
-        self.close_diff();
-    }
-
     /// Send commit action to the currently selected agent's pane (from dashboard view)
     fn send_commit_to_selected(&mut self) {
         if let Some(selected) = self.table_state.selected()
@@ -537,16 +523,4 @@ impl DiffOps for App {
         }
     }
 
-    /// Send merge action to the currently selected agent's pane (from dashboard view)
-    fn trigger_merge_for_selected(&mut self) {
-        if let Some(selected) = self.table_state.selected()
-            && let Some(agent) = self.agents.get(selected)
-        {
-            let _ = self.mux.send_keys_to_agent(
-                &agent.pane_id,
-                self.config.dashboard.merge(),
-                self.config.agent.as_deref(),
-            );
-        }
-    }
 }

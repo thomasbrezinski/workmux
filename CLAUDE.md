@@ -56,7 +56,7 @@ Agent status (working/waiting/done) is reported back to workmux via Claude Code 
 
 ### Dashboard
 
-TUI built with ratatui. On each tick: loads reconciled agents from state store, scans live panes for `wm-*` windows without state store entries (shows unconfigured/new sessions), fetches git status per worktree path, optionally fetches PR status from GitHub. Actions (`[m]` merge, `[c]` commit) send keystrokes directly to the agent pane. Columns: `# | Worktree | Project | Git | (PR) | Status | Time | Title`.
+TUI built with ratatui. On each tick: loads reconciled agents from state store, scans live panes for `wm-*` windows without state store entries (shows unconfigured/new sessions), fetches git status per worktree path, optionally fetches PR status from GitHub. Actions (`[c]` commit, `[d]` diff, `[x]` close, `[r]` remove) send keystrokes directly to the agent pane. Columns: `# | Project | Worktree | Git | (PR) | Status | Time | Title`.
 
 ## Future Considerations
 

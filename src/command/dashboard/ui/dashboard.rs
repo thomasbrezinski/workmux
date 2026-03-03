@@ -78,8 +78,6 @@ pub fn render_dashboard(f: &mut Frame, app: &mut App) {
             Span::raw("  "),
             Span::styled("[c]", Style::default().fg(Color::Green)),
             Span::raw(" commit  "),
-            Span::styled("[m]", Style::default().fg(Color::Yellow)),
-            Span::raw(" merge  "),
             Span::styled("[x]", Style::default().fg(Color::Red)),
             Span::raw(" close  "),
             Span::styled("[r]", Style::default().fg(Color::Red)),
@@ -450,17 +448,18 @@ fn render_preview(f: &mut Frame, app: &mut App, area: Rect) {
         (
             format!(" Preview: {} ", worktree_name),
             Style::default().fg(Color::Cyan),
-            Style::default().fg(app.palette.dimmed),
+            Style::default().fg(Color::LightRed),
         )
     } else {
         (
             " Preview ".to_string(),
             Style::default().fg(Color::Cyan),
-            Style::default().fg(app.palette.dimmed),
+            Style::default().fg(Color::LightRed),
         )
     };
 
     let block = Block::bordered()
+        .border_type(BorderType::Thick)
         .title(title)
         .title_style(title_style)
         .border_style(border_style);

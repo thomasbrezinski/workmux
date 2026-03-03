@@ -54,7 +54,6 @@ fn dashboard_normal_key(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('-') | KeyCode::Char('_') => Some(Action::DecreasePreviewSize),
         KeyCode::Char('d') => Some(Action::LoadWipDiff),
         KeyCode::Char('c') => Some(Action::SendCommitDashboard),
-        KeyCode::Char('m') => Some(Action::TriggerMergeDashboard),
         KeyCode::Char('x') => Some(Action::CloseSelected),
         KeyCode::Char('r') => Some(Action::BeginRemoveSelected),
         KeyCode::Char(c @ '1'..='9') => Some(Action::JumpToIndex((c as u8 - b'1') as usize)),
@@ -102,7 +101,6 @@ fn diff_normal_key(key: KeyEvent) -> Option<Action> {
         KeyCode::Tab => Some(Action::ToggleDiffType),
         KeyCode::Char('a') => Some(Action::EnterPatchMode),
         KeyCode::Char('c') => Some(Action::SendCommitDiff),
-        KeyCode::Char('m') => Some(Action::TriggerMergeDiff),
         _ => None,
     }
 }
@@ -125,7 +123,6 @@ fn patch_key(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('k') | KeyCode::Up => Some(Action::PrevHunk),
         KeyCode::Char('j') | KeyCode::Down => Some(Action::NextHunk),
         KeyCode::Char('c') => Some(Action::SendCommitDiff),
-        KeyCode::Char('m') => Some(Action::TriggerMergeDiff),
         KeyCode::Esc | KeyCode::Char('q') => Some(Action::ExitPatchMode),
         _ => None,
     }
@@ -158,7 +155,6 @@ pub fn help_rows(ctx: Context) -> Vec<(&'static str, &'static str)> {
             ("+/-", "Resize preview"),
             ("d", "View diff"),
             ("c", "Commit changes"),
-            ("m", "Merge branch"),
             ("x", "Close window"),
             ("r", "Remove worktree"),
             ("1-9", "Quick jump"),
@@ -173,7 +169,6 @@ pub fn help_rows(ctx: Context) -> Vec<(&'static str, &'static str)> {
             ("Tab", "Toggle WIP/Review"),
             ("a", "Enter patch mode (WIP only)"),
             ("c", "Commit changes"),
-            ("m", "Merge branch"),
         ],
         Context::Patch => vec![
             ("?", "Show help"),
@@ -185,7 +180,6 @@ pub fn help_rows(ctx: Context) -> Vec<(&'static str, &'static str)> {
             ("j/k", "Next/prev hunk"),
             ("Ctrl+d/u", "Scroll hunk"),
             ("c", "Commit changes"),
-            ("m", "Merge branch"),
             ("q/Esc", "Exit patch mode"),
         ],
         Context::Comment => vec![

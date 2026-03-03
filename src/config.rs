@@ -92,10 +92,6 @@ impl DashboardConfig {
             .unwrap_or("Commit staged changes with a descriptive message")
     }
 
-    pub fn merge(&self) -> &str {
-        self.merge.as_deref().unwrap_or("!workmux merge")
-    }
-
     /// Get the preview size percentage (clamped to 10-90).
     /// Default: 60
     pub fn preview_size(&self) -> u8 {

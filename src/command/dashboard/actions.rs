@@ -29,7 +29,6 @@ pub enum Action {
     DecreasePreviewSize,
     LoadWipDiff,
     SendCommitDashboard,
-    TriggerMergeDashboard,
 
     // Session cleanup
     CloseSelected,
@@ -49,7 +48,6 @@ pub enum Action {
     ToggleDiffType,
     EnterPatchMode,
     SendCommitDiff,
-    TriggerMergeDiff,
 
     // Patch mode
     StageAndNext,
@@ -151,11 +149,6 @@ pub fn apply_action(app: &mut App, action: Action) -> bool {
             app.send_commit_to_selected();
             false
         }
-        Action::TriggerMergeDashboard => {
-            app.trigger_merge_for_selected();
-            false
-        }
-
         // Session cleanup
         Action::CloseSelected => {
             app.close_selected();
@@ -227,11 +220,6 @@ pub fn apply_action(app: &mut App, action: Action) -> bool {
             app.send_commit_to_agent();
             false
         }
-        Action::TriggerMergeDiff => {
-            app.trigger_merge();
-            false
-        }
-
         // Patch mode
         Action::StageAndNext => {
             app.stage_and_next();
