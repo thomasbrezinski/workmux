@@ -23,6 +23,8 @@ struct WorktreeRow {
     mux_status: String,
     #[tabled(rename = "UNMERGED")]
     unmerged_status: String,
+    #[tabled(rename = "CLAUDE")]
+    claude_status: String,
     #[tabled(rename = "PATH")]
     path_str: String,
 }
@@ -109,10 +111,10 @@ fn format_agent_status(
     }
 }
 
-pub fn run(show_pr: bool, filter: &[String]) -> Result<()> {
+pub fn run(show_pr: bool, show_archived: bool, show_all: bool, filter: &[String]) -> Result<()> {
     let config = config::Config::load(None)?;
     let mux = create_backend(detect_backend());
-    let worktrees = workflow::list(&config, mux.as_ref(), show_pr, filter)?;
+    let worktrees = workflow::list(&config, mux.as_ref(), show_pr, show_archived, show_all, filter)?;
 
     if worktrees.is_empty() {
         println!("No sessions found");
@@ -137,8 +139,21 @@ pub fn run(show_pr: bool, filter: &[String]) -> Result<()> {
                 })
                 .unwrap_or_else(|| wt.path.display().to_string());
 
+            let claude_status = if wt.claude_session_id.is_some() {
+                "✓".to_string()
+            } else {
+                "-".to_string()
+            };
+
+            let branch_display = match wt.lifecycle {
+                Some(crate::manifest::Lifecycle::Archived) => {
+                    format!("{} \x1b[90m(archived)\x1b[0m", wt.branch)
+                }
+                _ => wt.branch,
+            };
+
             WorktreeRow {
-                branch: wt.branch,
+                branch: branch_display,
                 pr_status: format_pr_status(wt.pr_info),
                 agent_status: format_agent_status(wt.agent_status.as_ref(), &config, use_icons),
                 mux_status: if wt.has_mux_window {
@@ -151,15 +166,25 @@ pub fn run(show_pr: bool, filter: &[String]) -> Result<()> {
                 } else {
                     "-".to_string()
                 },
+                claude_status,
                 path_str,
             }
         })
         .collect();
 
+    // Check if any row has a Claude session ID
+    let has_any_claude = display_data.iter().any(|r| r.claude_status != "-");
+
     let mut table = Table::new(display_data);
     table
         .with(Style::blank())
-        .modify(Columns::new(0..6), Padding::new(0, 1, 0, 0));
+        .modify(Columns::new(0..7), Padding::new(0, 1, 0, 0));
+
+    // Hide columns that have no data. Remove from right to left to keep indices stable.
+    // CLAUDE column is index 5 (after PR, AGENT, MUX, UNMERGED)
+    if !has_any_claude {
+        table.with(Remove::column(Columns::new(5..6)));
+    }
 
     // Hide PR column if --pr flag not used (column 1)
     if !show_pr {

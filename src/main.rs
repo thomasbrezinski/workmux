@@ -8,6 +8,7 @@ mod git;
 mod github;
 mod llm;
 mod logger;
+mod manifest;
 mod markdown;
 mod multiplexer;
 mod naming;

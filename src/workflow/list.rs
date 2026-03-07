@@ -55,6 +55,8 @@ pub fn list(
     config: &config::Config,
     mux: &dyn Multiplexer,
     fetch_pr_status: bool,
+    show_archived: bool,
+    show_all: bool,
     filter: &[String],
 ) -> Result<Vec<WorktreeInfo>> {
     // Check mux status first — needed for both git worktrees and general sessions
@@ -156,6 +158,9 @@ pub fn list(
                     has_unmerged,
                     pr_info,
                     agent_status,
+                    claude_session_id: None,
+                    lifecycle: None,
+                    last_pane_title: None,
                 });
             }
         }
@@ -201,10 +206,93 @@ pub fn list(
                             has_unmerged: false,
                             pr_info: None,
                             agent_status,
+                            claude_session_id: None,
+                            lifecycle: None,
+                            last_pane_title: None,
                         });
                     }
                 }
             }
+        }
+    }
+
+    // Manifest enrichment: add Claude session IDs, lifecycle, and archived entries
+    if let Ok(mstore) = crate::manifest::ManifestStore::new() {
+        if let Ok(manifest) = mstore.load() {
+            // Enrich existing entries with manifest data
+            for wt in &mut worktrees {
+                let handle = wt
+                    .path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(&wt.branch);
+
+                // Try with repo_root (worktree), then without (general)
+                let repo_root = git::get_repo_root().ok();
+                let key = crate::manifest::manifest_key(repo_root.as_deref(), handle);
+                let entry = manifest
+                    .sessions
+                    .get(&key)
+                    .or_else(|| {
+                        let gen_key = crate::manifest::manifest_key(None, handle);
+                        manifest.sessions.get(&gen_key)
+                    });
+
+                if let Some(entry) = entry {
+                    wt.claude_session_id = entry.claude_session_id.clone();
+                    wt.lifecycle = Some(entry.lifecycle);
+                    // Use manifest title as fallback when no live agent
+                    if wt.agent_status.is_none() && wt.last_pane_title.is_none() {
+                        wt.last_pane_title = entry.last_pane_title.clone();
+                    }
+                }
+            }
+
+            // Add archived entries not already in the list (for --archived / --all)
+            if show_archived || show_all {
+                let lifecycle_filter = if show_archived {
+                    Some(crate::manifest::Lifecycle::Archived)
+                } else {
+                    None // show_all: include everything
+                };
+
+                if let Ok(entries) = mstore.list_entries(lifecycle_filter) {
+                    for (_key, entry) in entries {
+                        if entry.lifecycle == crate::manifest::Lifecycle::Archived {
+                            // Check if already in the list by workdir
+                            let already_listed = worktrees.iter().any(|wt| wt.path == entry.workdir);
+                            if !already_listed {
+                                worktrees.push(WorktreeInfo {
+                                    branch: entry.handle.clone(),
+                                    path: entry.workdir.clone(),
+                                    has_mux_window: false,
+                                    has_unmerged: false,
+                                    pr_info: None,
+                                    agent_status: None,
+                                    claude_session_id: entry.claude_session_id.clone(),
+                                    lifecycle: Some(entry.lifecycle),
+                                    last_pane_title: entry.last_pane_title.clone(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Filter out archived if neither --archived nor --all
+            if !show_archived && !show_all {
+                worktrees.retain(|wt| {
+                    wt.lifecycle != Some(crate::manifest::Lifecycle::Archived)
+                });
+            }
+
+            // If --archived only, filter to just archived
+            if show_archived && !show_all {
+                worktrees.retain(|wt| {
+                    wt.lifecycle == Some(crate::manifest::Lifecycle::Archived)
+                });
+            }
+
         }
     }
 

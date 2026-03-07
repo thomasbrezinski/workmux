@@ -371,6 +371,21 @@ pub fn create(context: &WorkflowContext, args: CreateArgs) -> Result<CreateResul
         hooks_run = result.post_create_hooks_run,
         "create:completed"
     );
+
+    // Manifest: register new worktree session (fire-and-forget)
+    if let Ok(store) = crate::manifest::ManifestStore::new() {
+        let repo_root = context.main_worktree_root.clone();
+        let entry = crate::manifest::ManifestEntry::new_worktree(
+            handle,
+            &worktree_path,
+            Some(&repo_root),
+            branch_name,
+        );
+        if let Err(e) = store.upsert_entry(Some(&repo_root), handle, entry) {
+            warn!(error = %e, "failed to write manifest entry for worktree session");
+        }
+    }
+
     Ok(result)
 }
 
@@ -442,6 +457,15 @@ pub fn create_general_session(
     )?;
     result.branch_name = name.to_string();
     info!(name = name, "create_general_session:completed");
+
+    // Manifest: register new general session (fire-and-forget)
+    if let Ok(store) = crate::manifest::ManifestStore::new() {
+        let entry = crate::manifest::ManifestEntry::new_general(name, working_dir);
+        if let Err(e) = store.upsert_entry(None, name, entry) {
+            warn!(error = %e, "failed to write manifest entry for general session");
+        }
+    }
+
     Ok(result)
 }
 

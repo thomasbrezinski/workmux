@@ -111,6 +111,15 @@ pub fn cleanup(
         mode = kind,
         "cleanup:start"
     );
+
+    // Manifest: remove entry on cleanup (fire-and-forget)
+    if let Ok(mstore) = crate::manifest::ManifestStore::new() {
+        let repo_root = crate::git::get_repo_root().ok();
+        if let Err(e) = mstore.remove_entry(repo_root.as_deref(), handle) {
+            warn!(error = %e, "failed to remove manifest entry during cleanup");
+        }
+    }
+
     // Change the CWD to main worktree before any destructive operations.
     // This prevents "Unable to read current working directory" errors when the command
     // is run from within the worktree being deleted.

@@ -70,6 +70,58 @@ pub fn run(name: Option<&str>) -> Result<()> {
         ));
     }
 
+    // Manifest: snapshot pane title and Claude session ID before killing the window.
+    if let Some(handle) = full_target_name.strip_prefix(prefix) {
+        if let Ok(mstore) = crate::manifest::ManifestStore::new() {
+            let repo_root = git::get_repo_root().ok();
+            let _ = mstore.update_entry(repo_root.as_deref(), handle, |entry| {
+                // Capture pane title from the agent state or tmux pane
+                if let Ok(agents) = crate::state::StateStore::new()
+                    .and_then(|s| s.list_all_agents())
+                {
+                    // Find agent whose window matches this handle
+                    for agent in &agents {
+                        if agent.workdir == entry.workdir {
+                            if let Some(ref title) = agent.pane_title {
+                                entry.last_pane_title = Some(title.clone());
+                            }
+                            if let Some(status) = agent.status {
+                                entry.last_agent_status = Some(
+                                    match status {
+                                        crate::multiplexer::AgentStatus::Working => "working",
+                                        crate::multiplexer::AgentStatus::Waiting => "waiting",
+                                        crate::multiplexer::AgentStatus::Done => "done",
+                                    }
+                                    .to_string(),
+                                );
+                            }
+                            break;
+                        }
+                    }
+                }
+                entry.updated_at = crate::manifest::unix_now();
+
+                // Also capture Claude session ID on close
+                if let Some(id) =
+                    crate::manifest::claude::capture_claude_session_id(&entry.workdir)
+                {
+                    entry.claude_session_id = Some(id);
+                }
+            });
+            // Try without repo_root too (general session)
+            if repo_root.is_some() {
+                let _ = mstore.update_entry(None, handle, |entry| {
+                    entry.updated_at = crate::manifest::unix_now();
+                    if let Some(id) =
+                        crate::manifest::claude::capture_claude_session_id(&entry.workdir)
+                    {
+                        entry.claude_session_id = Some(id);
+                    }
+                });
+            }
+        }
+    }
+
     // Stop any running containers for this worktree before killing the target.
     if let Some(handle) = full_target_name.strip_prefix(prefix) {
         sandbox::stop_containers_for_handle(handle, &config.sandbox);

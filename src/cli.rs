@@ -274,6 +274,16 @@ enum Commands {
         name: Option<String>,
     },
 
+    /// Archive a session (hide from dashboard, keep resumable)
+    Archive {
+        /// Session name/handle to archive
+        name: String,
+
+        /// Restore an archived session to active
+        #[arg(long, short)]
+        undo: bool,
+    },
+
     /// Merge a branch, then clean up the worktree and tmux window
     Merge {
         /// Worktree name or branch (defaults to current directory)
@@ -343,6 +353,14 @@ enum Commands {
         /// Show PR status for each worktree (requires gh CLI)
         #[arg(long)]
         pr: bool,
+
+        /// Show only archived sessions
+        #[arg(long, conflicts_with = "all")]
+        archived: bool,
+
+        /// Show all sessions (active + archived)
+        #[arg(long)]
+        all: bool,
 
         /// Filter by worktree name or branch (supports multiple)
         #[arg(value_parser = WorktreeBranchParser::new())]
@@ -641,6 +659,7 @@ pub fn run() -> Result<()> {
             prompt,
         } => command::open::run(name.as_deref(), run_hooks, force_files, new, prompt),
         Commands::Close { name } => command::close::run(name.as_deref()),
+        Commands::Archive { name, undo } => command::archive::run(&name, undo),
         Commands::Merge {
             name,
             into,
@@ -669,7 +688,12 @@ pub fn run() -> Result<()> {
             force,
             keep_branch,
         } => command::remove::run(names, gone, all, force, keep_branch),
-        Commands::List { pr, filter } => command::list::run(pr, &filter),
+        Commands::List {
+            pr,
+            archived,
+            all,
+            filter,
+        } => command::list::run(pr, archived, all, &filter),
         Commands::Path { name } => command::path::run(&name),
         Commands::Send { name, text, file } => {
             command::send::run(&name, text.as_deref(), file.as_deref())

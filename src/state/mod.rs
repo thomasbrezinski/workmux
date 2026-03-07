@@ -89,4 +89,38 @@ pub fn persist_agent_update(
     {
         warn!(error = %e, "failed to persist agent state");
     }
+
+    // Manifest: update agent status snapshot (fire-and-forget).
+    // On "done" status, also capture the Claude session ID.
+    if let Ok(mstore) = crate::manifest::ManifestStore::new() {
+        let status_str = status.map(|s| match s {
+            AgentStatus::Working => "working",
+            AgentStatus::Waiting => "waiting",
+            AgentStatus::Done => "done",
+        });
+        let is_done = status_str == Some("done");
+        let workdir = &state.workdir;
+        let pane_title = state.pane_title.clone();
+
+        let _ = mstore.update_by_workdir(workdir, |entry| {
+            // Debounce: skip if status unchanged
+            if let Some(s) = status_str {
+                if entry.last_agent_status.as_deref() != Some(s) {
+                    entry.last_agent_status = Some(s.to_string());
+                }
+            }
+            if let Some(title) = pane_title {
+                entry.last_pane_title = Some(title);
+            }
+            entry.updated_at = now;
+
+            // On "done": capture Claude session ID from ~/.claude.json
+            if is_done {
+                if let Some(id) = crate::manifest::claude::capture_claude_session_id(&entry.workdir)
+                {
+                    entry.claude_session_id = Some(id);
+                }
+            }
+        });
+    }
 }

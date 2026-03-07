@@ -150,4 +150,10 @@ pub struct WorktreeInfo {
     pub has_unmerged: bool,
     pub pr_info: Option<PrSummary>,
     pub agent_status: Option<AgentStatusSummary>,
+    /// Claude Code session ID (from manifest) for resuming conversations.
+    pub claude_session_id: Option<String>,
+    /// Session lifecycle from manifest (active/archived). None if not in manifest.
+    pub lifecycle: Option<crate::manifest::Lifecycle>,
+    /// Last known pane title from manifest (fallback when no live agent).
+    pub last_pane_title: Option<String>,
 }

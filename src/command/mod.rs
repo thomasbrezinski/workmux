@@ -1,4 +1,5 @@
 pub mod add;
+pub mod archive;
 pub mod args;
 pub mod capture;
 pub mod changelog;
