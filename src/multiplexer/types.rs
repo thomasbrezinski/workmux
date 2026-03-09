@@ -37,6 +37,8 @@ pub struct AgentPane {
     pub status: Option<AgentStatus>,
     /// Unix timestamp when status was last set
     pub status_ts: Option<u64>,
+    /// Remote host if this pane runs via SSH (e.g., "pi5@pi5")
+    pub remote_host: Option<String>,
 }
 
 /// Parameters for creating a new window/tab

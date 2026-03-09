@@ -203,6 +203,26 @@ pub trait Multiplexer: Send + Sync {
     /// Clear status from a pane
     fn clear_status(&self, pane_id: &str) -> Result<()>;
 
+    /// Set the remote host for a window (stored as @workmux_host window option).
+    /// Used by the dashboard to display which panes are running on a remote host.
+    fn set_host(&self, pane_id: &str, host: &str) -> Result<()> {
+        let _ = (pane_id, host);
+        Ok(()) // No-op for non-tmux backends
+    }
+
+    /// Get the remote host for a window, if set.
+    #[allow(dead_code)]
+    fn get_host(&self, pane_id: &str) -> Option<String> {
+        let _ = pane_id;
+        None // No-op for non-tmux backends
+    }
+
+    /// Get remote host for all windows at once (batched query).
+    /// Returns a map from window name to host string.
+    fn get_all_hosts(&self) -> std::collections::HashMap<String, String> {
+        std::collections::HashMap::new()
+    }
+
     /// Ensure the status format is configured (for backends that need it)
     fn ensure_status_format(&self, pane_id: &str) -> Result<()>;
 
@@ -447,6 +467,11 @@ pub trait Multiplexer: Send + Sync {
             if pane_config.focus {
                 focus_pane_id = Some(pane_id);
             }
+        }
+
+        // Set remote host window option if configured (used by dashboard)
+        if let Some(host) = options.host {
+            let _ = self.set_host(&pane_ids[0], host);
         }
 
         Ok(PaneSetupResult {

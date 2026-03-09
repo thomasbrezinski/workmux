@@ -94,8 +94,9 @@ pub fn render_dashboard(f: &mut Frame, app: &mut App) {
 }
 
 fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
-    // Check if we should show the PR column (only when at least one agent has a PR)
+    // Check if we should show conditional columns
     let show_pr_column = app.has_any_pr();
+    let show_host_column = app.has_any_host();
     let show_check_counts = app.config.dashboard.show_check_counts();
 
     // Check if git data is being refreshed
@@ -135,6 +136,10 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
 
     if show_pr_column {
         header_cells.push(Cell::from(pr_header));
+    }
+
+    if show_host_column {
+        header_cells.push(Cell::from("Host").style(header_style));
     }
 
     header_cells.extend(vec![
@@ -224,6 +229,8 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
                 None
             };
 
+            let host = agent.remote_host.clone();
+
             (
                 jump_key,
                 worktree_display,
@@ -236,6 +243,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
                 status_color,
                 duration,
                 title,
+                host,
             )
         })
         .collect();
@@ -244,7 +252,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     // Use at least 8 to fit the "Worktree" header
     let max_worktree_width = row_data
         .iter()
-        .map(|(_, worktree_display, _, _, _, _, _, _, _, _, _)| worktree_display.len())
+        .map(|(_, worktree_display, _, _, _, _, _, _, _, _, _, _)| worktree_display.len())
         .max()
         .unwrap_or(8)
         .max(8) // min 8 (header width)
@@ -253,7 +261,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     // Calculate max project name width (with padding, capped)
     let max_project_width = row_data
         .iter()
-        .map(|(_, _, project, _, _, _, _, _, _, _, _)| project.len())
+        .map(|(_, _, project, _, _, _, _, _, _, _, _, _)| project.len())
         .max()
         .unwrap_or(5)
         .clamp(5, 20) // min 5, max 20
@@ -263,7 +271,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     // Use chars().count() instead of len() because Nerd Font icons are multi-byte
     let max_git_width = row_data
         .iter()
-        .map(|(_, _, _, _, _, git_spans, _, _, _, _, _)| {
+        .map(|(_, _, _, _, _, git_spans, _, _, _, _, _, _)| {
             git_spans
                 .iter()
                 .map(|(text, _)| text.chars().count())
@@ -278,7 +286,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
     let max_pr_width = if show_pr_column {
         row_data
             .iter()
-            .filter_map(|(_, _, _, _, _, _, pr_spans, _, _, _, _)| pr_spans.as_ref())
+            .filter_map(|(_, _, _, _, _, _, pr_spans, _, _, _, _, _)| pr_spans.as_ref())
             .map(|spans| {
                 spans
                     .iter()
@@ -288,6 +296,20 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
             .max()
             .unwrap_or(4)
             .clamp(4, 16) // Increased from 12 to accommodate check icons + counts
+            + 1
+    } else {
+        0
+    };
+
+    // Calculate max host width (only if showing host column)
+    let max_host_width = if show_host_column {
+        row_data
+            .iter()
+            .filter_map(|(_, _, _, _, _, _, _, _, _, _, _, host)| host.as_ref())
+            .map(|h| h.len())
+            .max()
+            .unwrap_or(4)
+            .clamp(4, 20)
             + 1
     } else {
         0
@@ -308,6 +330,7 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
                 status_color,
                 duration,
                 title,
+                host,
             )| {
                 let worktree_style = if is_current {
                     Style::default().fg(app.palette.current_worktree_fg)
@@ -342,6 +365,17 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
                     cells.push(Cell::from(pr_line));
                 }
 
+                // Add Host cell if column is shown
+                if show_host_column {
+                    let host_text = host.unwrap_or_default();
+                    let host_style = if host_text.is_empty() {
+                        Style::default().fg(app.palette.dimmed)
+                    } else {
+                        Style::default().fg(Color::Magenta)
+                    };
+                    cells.push(Cell::from(host_text).style(host_style));
+                }
+
                 cells.extend(vec![
                     Cell::from(status_text).style(Style::default().fg(status_color)),
                     Cell::from(duration),
@@ -369,6 +403,10 @@ fn render_table(f: &mut Frame, app: &mut App, area: Rect) {
 
     if show_pr_column {
         constraints.push(Constraint::Length(max_pr_width as u16)); // PR: auto-sized
+    }
+
+    if show_host_column {
+        constraints.push(Constraint::Length(max_host_width as u16)); // Host: auto-sized
     }
 
     constraints.extend(vec![

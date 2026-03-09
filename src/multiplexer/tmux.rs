@@ -684,6 +684,34 @@ impl Multiplexer for TmuxBackend {
         Ok(())
     }
 
+    fn set_host(&self, pane_id: &str, host: &str) -> Result<()> {
+        self.tmux_cmd(&["set-option", "-w", "-t", pane_id, "@workmux_host", host])?;
+        Ok(())
+    }
+
+    fn get_host(&self, pane_id: &str) -> Option<String> {
+        self.tmux_query(&["display-message", "-t", pane_id, "-p", "#{@workmux_host}"])
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    }
+
+    fn get_all_hosts(&self) -> std::collections::HashMap<String, String> {
+        let mut hosts = std::collections::HashMap::new();
+        if let Ok(output) = self.tmux_query(&[
+            "list-windows", "-a", "-F", "#{window_name}\t#{@workmux_host}",
+        ]) {
+            for line in output.lines() {
+                if let Some((window, host)) = line.split_once('\t') {
+                    if !host.is_empty() {
+                        hosts.insert(window.to_string(), host.to_string());
+                    }
+                }
+            }
+        }
+        hosts
+    }
+
     fn clear_status(&self, pane_id: &str) -> Result<()> {
         self.clear_window_status_internal(pane_id);
         Ok(())

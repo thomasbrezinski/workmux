@@ -212,8 +212,17 @@ impl App {
                         pane_title: info.title,
                         status: None,
                         status_ts: None,
+                        remote_host: None, // Populated later from tmux window option
                     });
                 }
+            }
+        }
+
+        // Populate remote_host from tmux window options
+        let hosts = self.mux.get_all_hosts();
+        for agent in &mut self.agents {
+            if let Some(host) = hosts.get(&agent.window_name) {
+                agent.remote_host = Some(host.clone());
             }
         }
 
@@ -764,6 +773,10 @@ impl App {
         self.agents
             .iter()
             .any(|agent| self.get_pr_for_agent(agent).is_some())
+    }
+
+    pub fn has_any_host(&self) -> bool {
+        self.agents.iter().any(|a| a.remote_host.is_some())
     }
 
     /// Get PR statuses for caching
