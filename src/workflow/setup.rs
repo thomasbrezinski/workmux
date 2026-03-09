@@ -160,6 +160,7 @@ pub fn setup_environment(
         worktree_root: Some(worktree_path),
         lima_vm_name: lima_vm_name.as_deref(),
         session_name: Some(handle),
+        host: options.host.as_deref(),
     };
 
     // Track the focus pane across all windows
@@ -760,6 +761,7 @@ mod tests {
             config_root: None,
             open_if_exists: false,
             mode: crate::config::MuxMode::default(),
+            host: None,
         }
     }
 

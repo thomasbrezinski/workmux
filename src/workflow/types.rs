@@ -81,6 +81,9 @@ pub struct SetupOptions {
     pub open_if_exists: bool,
     /// Mode for tmux operations: window (default) or session
     pub mode: MuxMode,
+    /// Remote host for SSH wrapping (e.g., "user@host"). When set, all pane
+    /// commands are wrapped with `ssh -t <host> <command>`.
+    pub host: Option<String>,
 }
 
 impl SetupOptions {
@@ -97,6 +100,7 @@ impl SetupOptions {
             config_root: None,
             open_if_exists: false,
             mode: MuxMode::default(),
+            host: None,
         }
     }
 
@@ -112,6 +116,7 @@ impl SetupOptions {
             config_root: None,
             open_if_exists: false,
             mode: MuxMode::default(),
+            host: None,
         }
     }
 
@@ -133,6 +138,7 @@ impl SetupOptions {
             config_root: None,
             open_if_exists: false,
             mode: MuxMode::default(),
+            host: None,
         }
     }
 }

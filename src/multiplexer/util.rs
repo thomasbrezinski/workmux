@@ -275,6 +275,31 @@ fn inject_flag_after_executable(command: &str, flag: &str) -> String {
     }
 }
 
+/// Wrap a command for execution on a remote host via SSH.
+///
+/// The `-t` flag allocates a PTY for interactive sessions.
+/// Leading spaces (used to prevent shell history) are preserved.
+///
+/// If `persistent` is true, the command is followed by `exec $SHELL -l` so the
+/// SSH session stays open as an interactive shell after the command completes.
+/// Use `persistent: true` for non-agent panes (e.g., `clear`) that would otherwise
+/// cause SSH to exit immediately. Agent commands (e.g., `claude`) are interactive
+/// and keep the session alive on their own.
+pub fn wrap_for_ssh(host: &str, command: &str, persistent: bool) -> String {
+    let trimmed = command.trim_start();
+    let leading = &command[..command.len() - trimmed.len()];
+    if persistent {
+        format!("{}ssh -t {} '{}; exec $SHELL -l'", leading, host, trimmed.replace('\'', "'\\''"))
+    } else {
+        format!("{}ssh -t {} {}", leading, host, trimmed)
+    }
+}
+
+/// Generate an SSH command for a shell-only pane (no specific command).
+pub fn ssh_shell_command(host: &str) -> String {
+    format!("ssh -t {}", host)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -576,6 +601,53 @@ mod tests {
             result,
             " sh -c 'claude --dangerously-skip-permissions -- \"$(cat PROMPT.md)\"'"
         );
+    }
+
+    // --- wrap_for_ssh tests ---
+
+    #[test]
+    fn test_wrap_for_ssh_agent_command() {
+        assert_eq!(
+            wrap_for_ssh("pi5@pi5", "claude", false),
+            "ssh -t pi5@pi5 claude"
+        );
+    }
+
+    #[test]
+    fn test_wrap_for_ssh_agent_command_with_args() {
+        assert_eq!(
+            wrap_for_ssh("pi5@pi5", "claude --verbose", false),
+            "ssh -t pi5@pi5 claude --verbose"
+        );
+    }
+
+    #[test]
+    fn test_wrap_for_ssh_preserves_leading_space() {
+        assert_eq!(
+            wrap_for_ssh("pi5@pi5", " claude -- \"$(cat PROMPT.md)\"", false),
+            " ssh -t pi5@pi5 claude -- \"$(cat PROMPT.md)\""
+        );
+    }
+
+    #[test]
+    fn test_wrap_for_ssh_persistent_mode() {
+        assert_eq!(
+            wrap_for_ssh("pi5@pi5", "clear", true),
+            "ssh -t pi5@pi5 'clear; exec $SHELL -l'"
+        );
+    }
+
+    #[test]
+    fn test_wrap_for_ssh_persistent_with_leading_space() {
+        assert_eq!(
+            wrap_for_ssh("pi5@pi5", " clear", true),
+            " ssh -t pi5@pi5 'clear; exec $SHELL -l'"
+        );
+    }
+
+    #[test]
+    fn test_ssh_shell_command() {
+        assert_eq!(ssh_shell_command("pi5@pi5"), "ssh -t pi5@pi5");
     }
 
     // --- resolve_pane_command tests ---

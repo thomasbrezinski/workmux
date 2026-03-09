@@ -12,6 +12,7 @@ pub fn run(
     agent: Option<&str>,
     no_pane_cmds: bool,
     background: bool,
+    host: Option<String>,
 ) -> Result<()> {
     let config = config::Config::load(agent)?;
     let mux = create_backend(detect_backend());
@@ -46,6 +47,7 @@ pub fn run(
         config_root: None,
         open_if_exists: false,
         mode,
+        host,
     };
 
     let context = WorkflowContext::new_general(working_dir.clone(), config, mux)?;

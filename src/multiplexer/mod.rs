@@ -367,6 +367,15 @@ pub trait Multiplexer: Send + Sync {
                     resolved.command.clone()
                 };
 
+                // Apply SSH host wrapping if configured.
+                // Non-agent panes use persistent mode so SSH stays open after
+                // the command completes (e.g., "clear" won't cause SSH to exit).
+                let final_command = if let Some(host) = options.host {
+                    util::wrap_for_ssh(host, &final_command, !is_agent_pane)
+                } else {
+                    final_command
+                };
+
                 self.send_keys(&spawned_id, &final_command)?;
 
                 // Set working status for agent panes with injected prompts
@@ -380,6 +389,34 @@ pub trait Multiplexer: Send + Sync {
                     let _ = self.set_status(&spawned_id, icon, false);
                 }
 
+                spawned_id
+            } else if options.host.is_some() {
+                // No command but host is set - SSH into the remote host
+                let ssh_cmd = util::ssh_shell_command(options.host.unwrap());
+
+                let handshake = self.create_handshake()?;
+                let script = handshake.script_content(&shell);
+
+                let spawned_id = if is_first {
+                    self.respawn_pane(&pane_ids[0], working_dir, Some(&script))?
+                } else {
+                    let direction = pane_config.split.as_ref().unwrap();
+                    let target_idx = pane_config.target.unwrap_or(pane_ids.len() - 1);
+                    let target = pane_ids
+                        .get(target_idx)
+                        .ok_or_else(|| anyhow!("Invalid target pane index: {}", target_idx))?;
+                    self.split_pane(
+                        target,
+                        direction,
+                        working_dir,
+                        pane_config.size,
+                        pane_config.percentage,
+                        Some(&script),
+                    )?
+                };
+
+                handshake.wait()?;
+                self.send_keys(&spawned_id, &ssh_cmd)?;
                 spawned_id
             } else if is_first {
                 // No command for first pane - keep as-is

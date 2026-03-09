@@ -113,6 +113,7 @@ pub fn create(context: &WorkflowContext, args: CreateArgs) -> Result<CreateResul
             config_root: options.config_root.clone(),
             open_if_exists: false,
             mode: options.mode,
+            host: options.host.clone(),
         };
 
         return super::open::open(branch_name, context, open_options, false);

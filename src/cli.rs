@@ -243,6 +243,10 @@ enum Commands {
         /// Open in background (do not switch to the new window/session)
         #[arg(long, short = 'b')]
         background: bool,
+
+        /// Run pane commands on a remote host via SSH (e.g., "pi5@pi5", "user@hostname")
+        #[arg(long)]
+        host: Option<String>,
     },
 
     /// Open a tmux window for an existing worktree
@@ -650,7 +654,8 @@ pub fn run() -> Result<()> {
             agent,
             no_pane_cmds,
             background,
-        } => command::start::run(&name, dir, session, agent.as_deref(), no_pane_cmds, background),
+            host,
+        } => command::start::run(&name, dir, session, agent.as_deref(), no_pane_cmds, background, host),
         Commands::Open {
             name,
             run_hooks,

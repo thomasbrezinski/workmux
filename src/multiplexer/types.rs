@@ -96,6 +96,8 @@ pub struct PaneSetupOptions<'a> {
     pub lima_vm_name: Option<&'a str>,
     /// Session/handle name to inject into agent commands (e.g., `claude --name "handle"`)
     pub session_name: Option<&'a str>,
+    /// Remote host for SSH command wrapping (e.g., "user@host")
+    pub host: Option<&'a str>,
 }
 
 /// Backend type for multiplexer selection
