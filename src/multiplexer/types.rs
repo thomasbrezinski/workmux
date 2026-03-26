@@ -94,6 +94,8 @@ pub struct PaneSetupOptions<'a> {
     pub worktree_root: Option<&'a std::path::Path>,
     /// Pre-booted Lima VM name (if sandbox backend is Lima and VM was booted before window creation)
     pub lima_vm_name: Option<&'a str>,
+    /// Session/handle name to inject into agent commands (e.g., `claude --name "handle"`)
+    pub session_name: Option<&'a str>,
 }
 
 /// Backend type for multiplexer selection

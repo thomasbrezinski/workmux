@@ -123,25 +123,44 @@ pub fn resolve_pane_command(
     working_dir: &Path,
     effective_agent: Option<&str>,
     shell: &str,
+    session_name: Option<&str>,
 ) -> Option<ResolvedCommand> {
     let raw_command = pane_command?;
 
-    let (command, pane_effective_agent) = if raw_command == "<agent>" {
+    let (command, pane_effective_agent, is_agent_pane) = if raw_command == "<agent>" {
         // Bare <agent> - use window-level effective agent
         let agent = effective_agent?;
-        (agent, effective_agent)
+        (agent, effective_agent, true)
     } else if super::agent::is_known_agent(raw_command) {
         // Known agent command (e.g., "codex --flags") - use itself as effective
         // agent so prompt injection works even when it's not the configured agent
-        (raw_command, Some(raw_command))
+        (raw_command, Some(raw_command), true)
     } else {
         // Regular command - use window-level effective agent for prompt injection matching
-        (raw_command, effective_agent)
+        (raw_command, effective_agent, false)
     };
 
     if !run_commands {
         return None;
     }
+
+    // Inject session name into agent commands (e.g., "claude" -> "claude --name \"handle\"")
+    let named_command;
+    let command = if is_agent_pane {
+        if let Some(name) = session_name {
+            let profile = super::agent::resolve_profile(pane_effective_agent);
+            if let Some(name_arg) = profile.name_argument(name) {
+                named_command = inject_flag_after_executable(command, &name_arg);
+                named_command.as_str()
+            } else {
+                command
+            }
+        } else {
+            command
+        }
+    } else {
+        command
+    };
 
     let result = adjust_command(
         command,
@@ -563,7 +582,7 @@ mod tests {
 
     #[test]
     fn test_resolve_pane_command_none_when_no_command() {
-        let result = resolve_pane_command(None, true, None, Path::new("/tmp"), None, "/bin/zsh");
+        let result = resolve_pane_command(None, true, None, Path::new("/tmp"), None, "/bin/zsh", None);
         assert!(result.is_none());
     }
 
@@ -576,6 +595,7 @@ mod tests {
             Path::new("/tmp"),
             None,
             "/bin/zsh",
+            None,
         );
         assert!(result.is_none());
     }
@@ -583,7 +603,7 @@ mod tests {
     #[test]
     fn test_resolve_pane_command_returns_command_as_is() {
         let result =
-            resolve_pane_command(Some("vim"), true, None, Path::new("/tmp"), None, "/bin/zsh");
+            resolve_pane_command(Some("vim"), true, None, Path::new("/tmp"), None, "/bin/zsh", None);
         let resolved = result.unwrap();
         assert_eq!(resolved.command, "vim");
         assert!(!resolved.prompt_injected);
@@ -598,6 +618,7 @@ mod tests {
             Path::new("/tmp"),
             Some("claude"),
             "/bin/zsh",
+            None,
         );
         let resolved = result.unwrap();
         assert_eq!(resolved.command, "claude");
@@ -613,6 +634,7 @@ mod tests {
             Path::new("/tmp"),
             None,
             "/bin/zsh",
+            None,
         );
         assert!(result.is_none());
     }
@@ -628,6 +650,7 @@ mod tests {
             &working_dir,
             Some("claude"),
             "/bin/zsh",
+            None,
         );
         let resolved = result.unwrap();
         assert!(resolved.prompt_injected);
@@ -645,6 +668,7 @@ mod tests {
             &working_dir,
             Some("claude"),
             "/bin/zsh",
+            None,
         );
         let resolved = result.unwrap();
         assert!(!resolved.prompt_injected);
@@ -660,6 +684,7 @@ mod tests {
             Path::new("/tmp"),
             Some("claude"),
             "/bin/zsh",
+            None,
         );
         let resolved = result.unwrap();
         assert_eq!(resolved.command, "claude");
@@ -675,6 +700,7 @@ mod tests {
             Path::new("/tmp"),
             Some("claude"),
             "/bin/zsh",
+            None,
         );
         let resolved = result.unwrap();
         assert_eq!(resolved.command, "vim");
@@ -695,6 +721,7 @@ mod tests {
             Path::new("/tmp"),
             Some("claude"), // window-level agent is claude
             "/bin/zsh",
+            None,
         );
         let resolved = result.unwrap();
         assert_eq!(resolved.command, "codex --yolo");
@@ -713,6 +740,7 @@ mod tests {
             &working_dir,
             Some("claude"), // window-level is claude, pane is codex
             "/bin/zsh",
+            None,
         );
         let resolved = result.unwrap();
         assert!(resolved.prompt_injected);
@@ -732,11 +760,97 @@ mod tests {
             &working_dir,
             None, // no window-level agent at all
             "/bin/zsh",
+            None,
         );
         let resolved = result.unwrap();
         assert!(resolved.prompt_injected);
         // Should use gemini's profile (-i flag)
         assert!(resolved.command.contains("-i"));
         assert_eq!(resolved.effective_agent.as_deref(), Some("gemini"));
+    }
+
+    // --- session name injection tests ---
+
+    #[test]
+    fn test_resolve_pane_command_injects_name_for_claude_agent() {
+        let result = resolve_pane_command(
+            Some("<agent>"),
+            true,
+            None,
+            Path::new("/tmp"),
+            Some("claude"),
+            "/bin/zsh",
+            Some("my-task"),
+        );
+        let resolved = result.unwrap();
+        assert_eq!(resolved.command, "claude --name \"my-task\"");
+        assert!(!resolved.prompt_injected);
+    }
+
+    #[test]
+    fn test_resolve_pane_command_name_with_prompt_injection() {
+        let prompt = PathBuf::from("/tmp/worktree/PROMPT.md");
+        let working_dir = PathBuf::from("/tmp/worktree");
+        let result = resolve_pane_command(
+            Some("<agent>"),
+            true,
+            Some(&prompt),
+            &working_dir,
+            Some("claude"),
+            "/bin/zsh",
+            Some("my-task"),
+        );
+        let resolved = result.unwrap();
+        assert!(resolved.prompt_injected);
+        // Name should come before the prompt argument
+        assert!(resolved.command.contains("--name \"my-task\""));
+        assert!(resolved.command.contains("PROMPT.md"));
+    }
+
+    #[test]
+    fn test_resolve_pane_command_no_name_for_unsupported_agent() {
+        let result = resolve_pane_command(
+            Some("<agent>"),
+            true,
+            None,
+            Path::new("/tmp"),
+            Some("codex"),
+            "/bin/zsh",
+            Some("my-task"),
+        );
+        let resolved = result.unwrap();
+        // Codex doesn't support --name, so command should be bare
+        assert_eq!(resolved.command, "codex");
+    }
+
+    #[test]
+    fn test_resolve_pane_command_no_name_for_non_agent_command() {
+        let result = resolve_pane_command(
+            Some("vim"),
+            true,
+            None,
+            Path::new("/tmp"),
+            Some("claude"),
+            "/bin/zsh",
+            Some("my-task"),
+        );
+        let resolved = result.unwrap();
+        // vim is not an agent, should not get --name
+        assert_eq!(resolved.command, "vim");
+    }
+
+    #[test]
+    fn test_resolve_pane_command_name_none_skips_injection() {
+        let result = resolve_pane_command(
+            Some("<agent>"),
+            true,
+            None,
+            Path::new("/tmp"),
+            Some("claude"),
+            "/bin/zsh",
+            None,
+        );
+        let resolved = result.unwrap();
+        assert_eq!(resolved.command, "claude");
     }
 }

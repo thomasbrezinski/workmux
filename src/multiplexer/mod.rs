@@ -253,7 +253,7 @@ pub trait Multiplexer: Send + Sync {
                 continue;
             }
 
-            // Resolve command: handle <agent> placeholder and prompt injection
+            // Resolve command: handle <agent> placeholder, name injection, and prompt injection
             let adjusted_command = util::resolve_pane_command(
                 pane_config.command.as_deref(),
                 options.run_commands,
@@ -261,6 +261,7 @@ pub trait Multiplexer: Send + Sync {
                 working_dir,
                 effective_agent,
                 &shell,
+                options.session_name,
             );
 
             let pane_id = if let Some(resolved) = adjusted_command {

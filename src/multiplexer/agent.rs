@@ -43,6 +43,14 @@ pub trait AgentProfile: Send + Sync {
     fn prompt_argument(&self, prompt_path: &str) -> String {
         format!("-- \"$(cat {})\"", prompt_path)
     }
+
+    /// Format the session name argument for this agent, if supported.
+    ///
+    /// Returns the CLI fragment to inject (e.g., `--name "my-session"`).
+    /// Returns `None` for agents that don't support session naming.
+    fn name_argument(&self, _name: &str) -> Option<String> {
+        None
+    }
 }
 
 // === Built-in Profiles ===
@@ -64,6 +72,10 @@ impl AgentProfile for ClaudeProfile {
 
     fn skip_permissions_flag(&self) -> Option<&'static str> {
         Some("--dangerously-skip-permissions")
+    }
+
+    fn name_argument(&self, name: &str) -> Option<String> {
+        Some(format!("--name \"{}\"", name))
     }
 }
 
@@ -195,6 +207,10 @@ mod tests {
             profile.skip_permissions_flag(),
             Some("--dangerously-skip-permissions")
         );
+        assert_eq!(
+            profile.name_argument("my-task"),
+            Some("--name \"my-task\"".to_string())
+        );
     }
 
     #[test]
@@ -208,6 +224,7 @@ mod tests {
             "-i \"$(cat PROMPT.md)\""
         );
         assert_eq!(profile.skip_permissions_flag(), Some("--yolo"));
+        assert_eq!(profile.name_argument("my-task"), None);
     }
 
     #[test]
@@ -245,6 +262,7 @@ mod tests {
             profile.prompt_argument("PROMPT.md"),
             "-- \"$(cat PROMPT.md)\""
         );
+        assert_eq!(profile.name_argument("my-task"), None);
     }
 
     // === resolve_profile tests ===

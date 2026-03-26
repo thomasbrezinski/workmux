@@ -159,6 +159,7 @@ pub fn setup_environment(
         prompt_file_path: options.prompt_file_path.as_deref(),
         worktree_root: Some(worktree_path),
         lima_vm_name: lima_vm_name.as_deref(),
+        session_name: Some(handle),
     };
 
     // Track the focus pane across all windows
@@ -334,6 +335,7 @@ fn pre_boot_lima_vm(
             working_dir,
             effective_agent,
             &shell,
+            None, // session_name not needed for Lima pre-check
         );
         if resolved.is_none() {
             return false;
