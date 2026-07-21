@@ -76,6 +76,11 @@ pub struct AgentPane {
     /// window option during daemon reconcile.
     #[serde(default)]
     pub is_general: bool,
+    /// Full name of the Obsidian note linked to this session (set via
+    /// `wmx set-note`, stored in the `@wmx_note` tmux window option).
+    /// Shown in the sidebar via the `{note}` token when present.
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 /// Parameters for creating a new window/tab

@@ -194,6 +194,10 @@ impl<'a> RowContext<'a> {
                     String::new()
                 }
             }
+            TokenId::Note => match self.agent.note.as_deref() {
+                Some(n) if !n.is_empty() => format!("{} {}", crate::nerdfont::note_icon(), n),
+                _ => String::new(),
+            },
         }
     }
 
@@ -561,6 +565,7 @@ mod tests {
             agent_command: None,
             agent_kind: None,
             is_general: false,
+            note: None,
         }
     }
 

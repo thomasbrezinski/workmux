@@ -1428,13 +1428,17 @@ pub fn run() -> Result<()> {
                 .ok();
             let Some(mut agents) = agents else { continue };
 
-            // Mark general (`wmx start`) sessions so the sidebar can suppress
-            // git diff stats for them (they have no meaningful worktree diff).
+            // Mark general (`wmx start`) sessions (suppress git stats) and attach
+            // any linked Obsidian note name, both read from tmux window options.
             let general_windows = mux.general_windows();
-            if !general_windows.is_empty() {
+            let window_notes = mux.window_notes();
+            if !general_windows.is_empty() || !window_notes.is_empty() {
                 for a in &mut agents {
                     if general_windows.contains(&a.window_id) {
                         a.is_general = true;
+                    }
+                    if let Some(note) = window_notes.get(&a.window_id) {
+                        a.note = Some(note.clone());
                     }
                 }
             }
@@ -1808,6 +1812,7 @@ mod tests {
             agent_command: None,
             agent_kind: None,
             is_general: false,
+            note: None,
         }
     }
 

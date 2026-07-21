@@ -110,12 +110,12 @@ impl ResolvedAgentIcons {
 const DEFAULT_COMPACT_TEMPLATE: &str = "{status_icon} {primary} {pane_suffix} {fill} {elapsed}";
 const DEFAULT_TILE_TEMPLATES: &[&str] = &[
     "{primary} {pane_suffix} {fill} {elapsed}",
-    "{secondary} {fill} {git_stats}",
+    "{secondary} {fill} {note} {git_stats}",
     "{pane_title}",
 ];
 const DEFAULT_HORIZONTAL_TEMPLATES: &[&str] = &[
     "{status_icon} {primary} {pane_suffix} {fill} {elapsed}",
-    "{secondary} {fill} {git_stats}",
+    "{secondary} {fill} {note} {git_stats}",
     "{pane_title}",
 ];
 

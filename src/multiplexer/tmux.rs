@@ -4,7 +4,7 @@
 //! and exposes them through the Multiplexer trait interface.
 
 use anyhow::{Context, Result, anyhow};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
@@ -605,6 +605,31 @@ impl Multiplexer for TmuxBackend {
             }
         }
         set
+    }
+
+    fn set_note(&self, pane_id: &str, note: &str) -> Result<()> {
+        if note.is_empty() {
+            self.tmux_cmd(&["set-option", "-uw", "-t", pane_id, "@wmx_note"])?;
+        } else {
+            self.tmux_cmd(&["set-option", "-w", "-t", pane_id, "@wmx_note", note])?;
+        }
+        Ok(())
+    }
+
+    fn window_notes(&self) -> HashMap<String, String> {
+        let mut map = HashMap::new();
+        if let Ok(output) =
+            self.tmux_query(&["list-windows", "-a", "-F", "#{window_id}\t#{@wmx_note}"])
+        {
+            for line in output.lines() {
+                if let Some((window_id, note)) = line.split_once('\t')
+                    && !note.is_empty()
+                {
+                    map.insert(window_id.to_string(), note.to_string());
+                }
+            }
+        }
+        map
     }
 
     fn respawn_pane(&self, pane_id: &str, cwd: &Path, cmd: Option<&str>) -> Result<String> {

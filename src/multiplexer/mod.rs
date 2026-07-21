@@ -282,6 +282,19 @@ pub trait Multiplexer: Send + Sync {
         std::collections::HashSet::new()
     }
 
+    /// Set (or clear, when empty) the linked Obsidian note name on a window via
+    /// the `@wmx_note` tmux option. No-op for non-tmux backends.
+    fn set_note(&self, pane_id: &str, note: &str) -> Result<()> {
+        let _ = (pane_id, note);
+        Ok(())
+    }
+
+    /// Return a map of window ID -> linked Obsidian note name (batched query).
+    /// Empty for non-tmux backends.
+    fn window_notes(&self) -> std::collections::HashMap<String, String> {
+        std::collections::HashMap::new()
+    }
+
     /// Ensure the status format is configured (for backends that need it)
     fn ensure_status_format(&self, pane_id: &str) -> Result<()>;
 

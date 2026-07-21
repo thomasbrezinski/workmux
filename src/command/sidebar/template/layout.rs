@@ -528,6 +528,7 @@ mod tests {
             agent_command: None,
             agent_kind: None,
             is_general: false,
+            note: None,
         }
     }
 

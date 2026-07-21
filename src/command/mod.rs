@@ -23,6 +23,7 @@ pub mod sandbox;
 pub mod sandbox_run;
 pub mod send;
 pub mod set_base;
+pub mod set_note;
 pub mod set_window_status;
 pub mod setup;
 pub mod sidebar;

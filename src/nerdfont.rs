@@ -79,6 +79,19 @@ const FALLBACK_GIT_ICONS: GitIcons = GitIcons {
 /// Git branch icon used in the setup prompt.
 const GIT_BRANCH_ICON: &str = "\u{e725}"; // nf-dev-git_branch
 
+/// Icon shown before a linked Obsidian note name in the sidebar.
+const NOTE_ICON: &str = "\u{f16d9}"; // nf-md-note_text_outline
+const FALLBACK_NOTE_ICON: &str = "▪";
+
+/// Note icon for the sidebar `{note}` token (falls back to ASCII when nerdfont off).
+pub fn note_icon() -> &'static str {
+    if is_enabled() {
+        NOTE_ICON
+    } else {
+        FALLBACK_NOTE_ICON
+    }
+}
+
 /// Initialize the nerdfont setting from config or detection.
 /// Should be called early in the CLI flow.
 pub fn init(config_nerdfont: Option<bool>, config_has_pua: bool) {
