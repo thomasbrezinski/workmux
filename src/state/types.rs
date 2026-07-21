@@ -147,6 +147,7 @@ impl AgentState {
             window_cmd: None,
             agent_command: Some(self.command.clone()),
             agent_kind: self.agent_kind.clone(),
+            is_general: false,
         }
     }
 }

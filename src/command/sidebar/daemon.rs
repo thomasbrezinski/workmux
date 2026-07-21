@@ -1426,7 +1426,18 @@ pub fn run() -> Result<()> {
             let agents = StateStore::new()
                 .and_then(|store| store.load_reconciled_agents(mux.as_ref()))
                 .ok();
-            let Some(agents) = agents else { continue };
+            let Some(mut agents) = agents else { continue };
+
+            // Mark general (`wmx start`) sessions so the sidebar can suppress
+            // git diff stats for them (they have no meaningful worktree diff).
+            let general_windows = mux.general_windows();
+            if !general_windows.is_empty() {
+                for a in &mut agents {
+                    if general_windows.contains(&a.window_id) {
+                        a.is_general = true;
+                    }
+                }
+            }
 
             let (position, layout_mode) = {
                 let cfg = config.lock().unwrap();
@@ -1796,6 +1807,7 @@ mod tests {
             window_cmd: None,
             agent_command: None,
             agent_kind: None,
+            is_general: false,
         }
     }
 

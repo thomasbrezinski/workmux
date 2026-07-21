@@ -269,6 +269,19 @@ pub trait Multiplexer: Send + Sync {
     /// Clear status from a pane
     fn clear_status(&self, pane_id: &str) -> Result<()>;
 
+    /// Tag a window as a general (`wmx start`) session via the `@wmx_general`
+    /// option so the sidebar can suppress git diff stats. No-op for non-tmux.
+    fn set_general(&self, pane_id: &str) -> Result<()> {
+        let _ = pane_id;
+        Ok(())
+    }
+
+    /// Return the set of window IDs tagged with `@wmx_general` (batched query).
+    /// Empty for non-tmux backends.
+    fn general_windows(&self) -> std::collections::HashSet<String> {
+        std::collections::HashSet::new()
+    }
+
     /// Ensure the status format is configured (for backends that need it)
     fn ensure_status_format(&self, pane_id: &str) -> Result<()>;
 
@@ -543,6 +556,11 @@ pub trait Multiplexer: Send + Sync {
             if pane_config.zoom {
                 zoom_pane_id = Some(pane_id);
             }
+        }
+
+        // Tag general (`wmx start`) windows so the sidebar suppresses git stats.
+        if options.is_general && !pane_ids.is_empty() {
+            let _ = self.set_general(&pane_ids[0]);
         }
 
         Ok(PaneSetupResult {

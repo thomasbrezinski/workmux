@@ -71,6 +71,11 @@ pub struct AgentPane {
     /// before falling back to stem-based profile resolution.
     #[serde(default)]
     pub agent_kind: Option<String>,
+    /// True for general (`wmx start`) sessions with no git worktree. The sidebar
+    /// suppresses git diff stats for these. Set from the `@wmx_general` tmux
+    /// window option during daemon reconcile.
+    #[serde(default)]
+    pub is_general: bool,
 }
 
 /// Parameters for creating a new window/tab
@@ -136,6 +141,9 @@ pub struct PaneSetupOptions<'a> {
     /// `None` disables name injection. Set to the workmux handle so the Claude session
     /// name matches the tmux window.
     pub session_name: Option<&'a str>,
+    /// True for general (`wmx start`) sessions. Tags the created window with the
+    /// `@wmx_general` tmux option so the sidebar can suppress git diff stats.
+    pub is_general: bool,
 }
 
 /// Backend type for multiplexer selection

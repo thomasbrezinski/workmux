@@ -489,6 +489,7 @@ pub fn create(context: &WorkflowContext, args: CreateArgs) -> Result<CreateResul
         &options_with_prompt,
         agent,
         None,
+        false, // git worktree session
     )?;
     result.base_branch = base_branch_for_creation.clone();
     info!(
@@ -565,6 +566,7 @@ pub fn create_general_session(
         &options,
         agent,
         None,
+        true, // general (non-git) session
     )?;
     result.branch_name = name.to_string();
     info!(name = name, "create_general_session:completed");

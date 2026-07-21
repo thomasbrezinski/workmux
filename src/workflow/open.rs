@@ -236,6 +236,7 @@ pub fn open(
         &options_with_workdir,
         None,
         after_window,
+        false, // git worktree session
     )?;
     info!(
         handle = handle,

@@ -35,6 +35,7 @@ pub fn setup_environment(
     options: &super::types::SetupOptions,
     agent: Option<&str>,
     after_window: Option<String>,
+    is_general: bool,
 ) -> Result<CreateResult> {
     // Resolve agent name through the agents map once, use everywhere
     let agent = agent.map(|a| {
@@ -168,6 +169,7 @@ pub fn setup_environment(
         lima_vm_name: lima_vm_name.as_deref(),
         resume_mode: options.resume_mode.clone(),
         session_name: Some(handle),
+        is_general,
     };
 
     // Track the focus and zoom pane across all windows

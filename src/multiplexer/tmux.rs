@@ -586,6 +586,27 @@ impl Multiplexer for TmuxBackend {
         self.tmux_cmd(&["kill-pane", "-t", pane_id])
     }
 
+    fn set_general(&self, pane_id: &str) -> Result<()> {
+        self.tmux_cmd(&["set-option", "-w", "-t", pane_id, "@wmx_general", "1"])?;
+        Ok(())
+    }
+
+    fn general_windows(&self) -> HashSet<String> {
+        let mut set = HashSet::new();
+        if let Ok(output) =
+            self.tmux_query(&["list-windows", "-a", "-F", "#{window_id}\t#{@wmx_general}"])
+        {
+            for line in output.lines() {
+                if let Some((window_id, value)) = line.split_once('\t')
+                    && value == "1"
+                {
+                    set.insert(window_id.to_string());
+                }
+            }
+        }
+        set
+    }
+
     fn respawn_pane(&self, pane_id: &str, cwd: &Path, cmd: Option<&str>) -> Result<String> {
         let working_dir_str = cwd
             .to_str()

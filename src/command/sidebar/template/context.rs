@@ -89,7 +89,13 @@ impl<'a> RowContext<'a> {
             .unwrap_or_default();
 
         let pane_title = build_pane_title(agent, &primary, &secondary, app.window_prefix());
-        let git_status = app.git_statuses.get(&agent.path);
+        // General (`wmx start`) sessions have no meaningful worktree diff, so
+        // suppress git stats entirely by withholding the status from the row.
+        let git_status = if agent.is_general {
+            None
+        } else {
+            app.git_statuses.get(&agent.path)
+        };
         let pr_summary = app.pr_statuses.get(&agent.path);
         let kind =
             effective_agent_kind(agent.agent_kind.as_deref(), agent.agent_command.as_deref());
@@ -554,6 +560,7 @@ mod tests {
             window_cmd: None,
             agent_command: None,
             agent_kind: None,
+            is_general: false,
         }
     }
 
