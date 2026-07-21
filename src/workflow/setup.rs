@@ -167,6 +167,7 @@ pub fn setup_environment(
         worktree_root: Some(worktree_path),
         lima_vm_name: lima_vm_name.as_deref(),
         resume_mode: options.resume_mode.clone(),
+        session_name: Some(handle),
     };
 
     // Track the focus and zoom pane across all windows
@@ -361,6 +362,7 @@ fn pre_boot_lima_vm(
             effective_agent,
             &shell,
             config.agent_type.as_deref(),
+            None, // name injection irrelevant to the Lima-needs pre-check
         );
         if resolved.is_none() {
             return false;

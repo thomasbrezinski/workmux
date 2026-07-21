@@ -142,25 +142,44 @@ pub fn resolve_pane_command(
     effective_agent: Option<&str>,
     shell: &str,
     type_override: Option<&str>,
+    session_name: Option<&str>,
 ) -> Option<ResolvedCommand> {
     let raw_command = pane_command?;
 
-    let (command, pane_effective_agent) = if raw_command == "<agent>" {
+    let (command, pane_effective_agent, is_agent_pane) = if raw_command == "<agent>" {
         // Bare <agent> - use window-level effective agent
         let agent = effective_agent?;
-        (agent, effective_agent)
+        (agent, effective_agent, true)
     } else if super::agent::is_known_agent(raw_command) {
         // Known agent command (e.g., "codex --flags") - use itself as effective
         // agent so prompt injection works even when it's not the configured agent
-        (raw_command, Some(raw_command))
+        (raw_command, Some(raw_command), true)
     } else {
         // Regular command - use window-level effective agent for prompt injection matching
-        (raw_command, effective_agent)
+        (raw_command, effective_agent, false)
     };
 
     if !run_commands {
         return None;
     }
+
+    // Inject the session display-name flag into agent panes *before* prompt
+    // rewriting and shell wrapping (e.g., `claude` -> `claude --name "handle"`),
+    // so the flag is treated as part of the agent command downstream and the
+    // Claude session is named after its workmux handle / tmux window. No-op when
+    // the resolved profile doesn't support naming (only Claude does today).
+    let named_command;
+    let command = if is_agent_pane
+        && let Some(name) = session_name
+        && let Some(name_arg) =
+            super::agent::resolve_profile_with_type(pane_effective_agent, type_override)
+                .name_argument(name)
+    {
+        named_command = inject_flag_after_executable(command, &name_arg);
+        named_command.as_str()
+    } else {
+        command
+    };
 
     let result = adjust_command(
         command,
@@ -176,6 +195,22 @@ pub fn resolve_pane_command(
         prompt_injected,
         effective_agent: pane_effective_agent.map(|s| s.to_string()),
     })
+}
+
+/// Insert a flag fragment immediately after the executable token of a command.
+///
+/// `claude --resume` + `--name "x"` -> `claude --name "x" --resume`.
+/// Any leading whitespace (used elsewhere to suppress shell history) is
+/// preserved, and the flag lands right after the first real token.
+fn inject_flag_after_executable(command: &str, flag: &str) -> String {
+    let leading_len = command.len() - command.trim_start().len();
+    let (leading, rest) = command.split_at(leading_len);
+    if let Some(space_idx) = rest.find(' ') {
+        let (exe, tail) = rest.split_at(space_idx);
+        format!("{}{} {}{}", leading, exe, flag, tail)
+    } else {
+        format!("{}{} {}", leading, rest, flag)
+    }
 }
 
 /// Adjust a command for execution, potentially rewriting it to inject prompts.
@@ -754,7 +789,7 @@ mod tests {
     #[test]
     fn test_resolve_pane_command_none_when_no_command() {
         let result =
-            resolve_pane_command(None, true, None, Path::new("/tmp"), None, "/bin/zsh", None);
+            resolve_pane_command(None, true, None, Path::new("/tmp"), None, "/bin/zsh", None, None);
         assert!(result.is_none());
     }
 
@@ -767,6 +802,7 @@ mod tests {
             Path::new("/tmp"),
             None,
             "/bin/zsh",
+            None,
             None,
         );
         assert!(result.is_none());
@@ -781,6 +817,7 @@ mod tests {
             Path::new("/tmp"),
             None,
             "/bin/zsh",
+            None,
             None,
         );
         let resolved = result.unwrap();
@@ -798,6 +835,7 @@ mod tests {
             Some("claude"),
             "/bin/zsh",
             None,
+            None,
         );
         let resolved = result.unwrap();
         assert_eq!(resolved.command, "claude");
@@ -814,6 +852,7 @@ mod tests {
             None,
             "/bin/zsh",
             None,
+            None,
         );
         assert!(result.is_none());
     }
@@ -829,6 +868,7 @@ mod tests {
             &working_dir,
             Some("claude"),
             "/bin/zsh",
+            None,
             None,
         );
         let resolved = result.unwrap();
@@ -848,6 +888,7 @@ mod tests {
             Some("claude"),
             "/bin/zsh",
             None,
+            None,
         );
         let resolved = result.unwrap();
         assert!(!resolved.prompt_injected);
@@ -864,6 +905,7 @@ mod tests {
             Some("claude"),
             "/bin/zsh",
             None,
+            None,
         );
         let resolved = result.unwrap();
         assert_eq!(resolved.command, "claude");
@@ -879,6 +921,7 @@ mod tests {
             Path::new("/tmp"),
             Some("claude"),
             "/bin/zsh",
+            None,
             None,
         );
         let resolved = result.unwrap();
@@ -901,11 +944,89 @@ mod tests {
             Some("claude"), // window-level agent is claude
             "/bin/zsh",
             None,
+            None,
         );
         let resolved = result.unwrap();
         assert_eq!(resolved.command, "codex --yolo");
         // effective_agent should be the command itself, not the window-level agent
         assert_eq!(resolved.effective_agent.as_deref(), Some("codex --yolo"));
+    }
+
+    // --- session-name injection (claude --name "<handle>") ---
+
+    #[test]
+    fn test_resolve_pane_command_injects_session_name_for_claude() {
+        let result = resolve_pane_command(
+            Some("<agent>"),
+            true,
+            None,
+            Path::new("/tmp"),
+            Some("claude"),
+            "/bin/zsh",
+            None,
+            Some("my-task"),
+        );
+        let resolved = result.unwrap();
+        assert_eq!(resolved.command, "claude --name \"my-task\"");
+    }
+
+    #[test]
+    fn test_resolve_pane_command_no_name_injection_for_non_claude() {
+        // codex has no name_argument -> command unchanged despite session_name
+        let result = resolve_pane_command(
+            Some("codex --yolo"),
+            true,
+            None,
+            Path::new("/tmp"),
+            Some("claude"),
+            "/bin/zsh",
+            None,
+            Some("my-task"),
+        );
+        let resolved = result.unwrap();
+        assert_eq!(resolved.command, "codex --yolo");
+    }
+
+    #[test]
+    fn test_resolve_pane_command_name_injected_before_prompt() {
+        let prompt = PathBuf::from("/tmp/worktree/PROMPT.md");
+        let working_dir = PathBuf::from("/tmp/worktree");
+        let result = resolve_pane_command(
+            Some("claude"),
+            true,
+            Some(&prompt),
+            &working_dir,
+            Some("claude"),
+            "/bin/zsh",
+            None,
+            Some("feat-x"),
+        );
+        let resolved = result.unwrap();
+        // --name lands right after the executable, before the prompt args.
+        // (Command may carry a leading space used to suppress shell history.)
+        assert!(
+            resolved
+                .command
+                .trim_start()
+                .starts_with("claude --name \"feat-x\"")
+        );
+        assert!(resolved.command.contains("PROMPT.md"));
+    }
+
+    #[test]
+    fn test_resolve_pane_command_no_name_when_session_name_absent() {
+        let result = resolve_pane_command(
+            Some("<agent>"),
+            true,
+            None,
+            Path::new("/tmp"),
+            Some("claude"),
+            "/bin/zsh",
+            None,
+            None,
+        );
+        let resolved = result.unwrap();
+        assert_eq!(resolved.command, "claude");
     }
 
     #[test]
@@ -919,6 +1040,7 @@ mod tests {
             &working_dir,
             Some("claude"), // window-level is claude, pane is codex
             "/bin/zsh",
+            None,
             None,
         );
         let resolved = result.unwrap();
@@ -939,6 +1061,7 @@ mod tests {
             &working_dir,
             None, // no window-level agent at all
             "/bin/zsh",
+            None,
             None,
         );
         let resolved = result.unwrap();
@@ -961,6 +1084,7 @@ mod tests {
             Some("kiro-cli"),
             "/bin/zsh",
             None,
+            None,
         );
         let resolved = result.unwrap();
         assert_eq!(resolved.command, "kiro-cli chat");
@@ -977,6 +1101,7 @@ mod tests {
             Some("kiro-cli chat"),
             "/bin/zsh",
             None,
+            None,
         );
         let resolved = result.unwrap();
         assert_eq!(resolved.command, "kiro-cli chat");
@@ -992,6 +1117,7 @@ mod tests {
             Path::new("/tmp"),
             Some("kiro-cli"),
             "/bin/zsh",
+            None,
             None,
         );
         let resolved = result.unwrap();
@@ -1011,6 +1137,7 @@ mod tests {
             Some("kiro-cli"),
             "/bin/zsh",
             None,
+            None,
         );
         let resolved = result.unwrap();
         assert!(resolved.prompt_injected);
@@ -1027,6 +1154,7 @@ mod tests {
             Path::new("/tmp"),
             Some("kiro-cli --verbose"),
             "/bin/zsh",
+            None,
             None,
         );
         let resolved = result.unwrap();

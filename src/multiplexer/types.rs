@@ -132,6 +132,10 @@ pub struct PaneSetupOptions<'a> {
     pub lima_vm_name: Option<&'a str>,
     /// How to resume a conversation (continue last, fork specific session, or none).
     pub resume_mode: ResumeMode,
+    /// Handle to inject as the agent's session display name (e.g., `claude --name "handle"`).
+    /// `None` disables name injection. Set to the workmux handle so the Claude session
+    /// name matches the tmux window.
+    pub session_name: Option<&'a str>,
 }
 
 /// Backend type for multiplexer selection

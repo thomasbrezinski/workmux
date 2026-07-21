@@ -339,6 +339,7 @@ pub trait Multiplexer: Send + Sync {
                 effective_agent,
                 &shell,
                 config.agent_type.as_deref(),
+                options.session_name,
             );
 
             let pane_id = if let Some(mut resolved) = adjusted_command {

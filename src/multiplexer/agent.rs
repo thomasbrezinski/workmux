@@ -71,6 +71,15 @@ pub trait AgentProfile: Send + Sync {
     fn continue_flag(&self) -> Option<&'static str> {
         None
     }
+
+    /// Format the session display-name argument for this agent, if supported.
+    ///
+    /// Returns the CLI fragment to inject after the executable
+    /// (e.g., `--name "my-session"`), or `None` for agents without session
+    /// naming. Used to name the agent's session after its workmux handle.
+    fn name_argument(&self, _name: &str) -> Option<String> {
+        None
+    }
 }
 
 // === Built-in Profiles ===
@@ -96,6 +105,12 @@ impl AgentProfile for ClaudeProfile {
 
     fn auto_name_command(&self) -> Option<&'static str> {
         Some("claude --model haiku -p")
+    }
+
+    fn name_argument(&self, name: &str) -> Option<String> {
+        // Escape embedded double-quotes so a handle containing them can't
+        // break the shell command the multiplexer runs.
+        Some(format!("--name \"{}\"", name.replace('"', "\\\"")))
     }
 
     fn continue_flag(&self) -> Option<&'static str> {
