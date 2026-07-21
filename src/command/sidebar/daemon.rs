@@ -27,7 +27,7 @@ use super::snapshot::build_snapshot;
 /// Compute socket path from instance_id.
 pub fn socket_path(instance_id: &str) -> PathBuf {
     let safe_id = instance_id.replace(['/', '\\'], "-");
-    std::env::temp_dir().join(format!("workmux-sidebar-{}.sock", safe_id))
+    std::env::temp_dir().join(format!("wmx-sidebar-{}.sock", safe_id))
 }
 
 /// Result of a batched tmux query.

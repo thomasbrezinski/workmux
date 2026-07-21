@@ -61,7 +61,7 @@ fn init_inner() -> Result<()> {
 
 fn determine_log_path() -> Result<PathBuf> {
     if let Ok(state_dir) = crate::xdg::state_dir() {
-        return Ok(state_dir.join("workmux.log"));
+        return Ok(state_dir.join("wmx.log"));
     }
 
     // Fallback to current directory if home cannot be determined
