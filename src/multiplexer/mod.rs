@@ -276,9 +276,10 @@ pub trait Multiplexer: Send + Sync {
         Ok(())
     }
 
-    /// Return the set of window IDs tagged with `@wmx_general` (batched query).
-    /// Empty for non-tmux backends.
-    fn general_windows(&self) -> std::collections::HashSet<String> {
+    /// Return the set of pane IDs whose window is tagged `@wmx_general` (batched
+    /// query; keyed by pane so callers can match on `AgentPane.pane_id`, which is
+    /// always populated). Empty for non-tmux backends.
+    fn general_panes(&self) -> std::collections::HashSet<String> {
         std::collections::HashSet::new()
     }
 
@@ -289,9 +290,10 @@ pub trait Multiplexer: Send + Sync {
         Ok(())
     }
 
-    /// Return a map of window ID -> linked Obsidian note name (batched query).
-    /// Empty for non-tmux backends.
-    fn window_notes(&self) -> std::collections::HashMap<String, String> {
+    /// Return a map of pane ID -> its window's linked Obsidian note name (batched
+    /// query; keyed by pane for the same reason as `general_panes`). Empty for
+    /// non-tmux backends.
+    fn pane_notes(&self) -> std::collections::HashMap<String, String> {
         std::collections::HashMap::new()
     }
 

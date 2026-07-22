@@ -80,7 +80,7 @@ const FALLBACK_GIT_ICONS: GitIcons = GitIcons {
 const GIT_BRANCH_ICON: &str = "\u{e725}"; // nf-dev-git_branch
 
 /// Icon shown before a linked Obsidian note name in the sidebar.
-const NOTE_ICON: &str = "\u{f16d9}"; // nf-md-note_text_outline
+const NOTE_ICON: &str = "\u{f0f6}"; // nf-fa-file_text_o
 const FALLBACK_NOTE_ICON: &str = "▪";
 
 /// Note icon for the sidebar `{note}` token (falls back to ASCII when nerdfont off).

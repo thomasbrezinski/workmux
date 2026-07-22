@@ -292,9 +292,7 @@ impl<'a> RowContext<'a> {
                 .fg(self.palette.current_worktree_fg)
                 .add_modifier(Modifier::BOLD),
             TokenId::Primary => Style::default().fg(self.palette.text),
-            TokenId::Secondary => Style::default()
-                .fg(self.palette.text)
-                .add_modifier(Modifier::DIM),
+            TokenId::Secondary => Style::default().fg(self.palette.dimmed),
             TokenId::PaneTitle => Style::default().fg(self.palette.dimmed),
             TokenId::PaneSuffix => Style::default().fg(self.palette.dimmed),
             TokenId::Elapsed => Style::default()

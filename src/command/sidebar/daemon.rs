@@ -1430,14 +1430,14 @@ pub fn run() -> Result<()> {
 
             // Mark general (`wmx start`) sessions (suppress git stats) and attach
             // any linked Obsidian note name, both read from tmux window options.
-            let general_windows = mux.general_windows();
-            let window_notes = mux.window_notes();
-            if !general_windows.is_empty() || !window_notes.is_empty() {
+            let general_panes = mux.general_panes();
+            let pane_notes = mux.pane_notes();
+            if !general_panes.is_empty() || !pane_notes.is_empty() {
                 for a in &mut agents {
-                    if general_windows.contains(&a.window_id) {
+                    if general_panes.contains(&a.pane_id) {
                         a.is_general = true;
                     }
-                    if let Some(note) = window_notes.get(&a.window_id) {
+                    if let Some(note) = pane_notes.get(&a.pane_id) {
                         a.note = Some(note.clone());
                     }
                 }

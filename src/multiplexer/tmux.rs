@@ -591,16 +591,19 @@ impl Multiplexer for TmuxBackend {
         Ok(())
     }
 
-    fn general_windows(&self) -> HashSet<String> {
+    fn general_panes(&self) -> HashSet<String> {
         let mut set = HashSet::new();
+        // Query per-pane: tmux resolves window options (`@wmx_general`) in pane
+        // format context, so we key by pane_id (always populated on AgentPane)
+        // rather than window_id (empty until resolved during the tick).
         if let Ok(output) =
-            self.tmux_query(&["list-windows", "-a", "-F", "#{window_id}\t#{@wmx_general}"])
+            self.tmux_query(&["list-panes", "-a", "-F", "#{pane_id}\t#{@wmx_general}"])
         {
             for line in output.lines() {
-                if let Some((window_id, value)) = line.split_once('\t')
+                if let Some((pane_id, value)) = line.split_once('\t')
                     && value == "1"
                 {
-                    set.insert(window_id.to_string());
+                    set.insert(pane_id.to_string());
                 }
             }
         }
@@ -616,16 +619,17 @@ impl Multiplexer for TmuxBackend {
         Ok(())
     }
 
-    fn window_notes(&self) -> HashMap<String, String> {
+    fn pane_notes(&self) -> HashMap<String, String> {
         let mut map = HashMap::new();
+        // Per-pane query (see general_panes): key by pane_id.
         if let Ok(output) =
-            self.tmux_query(&["list-windows", "-a", "-F", "#{window_id}\t#{@wmx_note}"])
+            self.tmux_query(&["list-panes", "-a", "-F", "#{pane_id}\t#{@wmx_note}"])
         {
             for line in output.lines() {
-                if let Some((window_id, note)) = line.split_once('\t')
+                if let Some((pane_id, note)) = line.split_once('\t')
                     && !note.is_empty()
                 {
-                    map.insert(window_id.to_string(), note.to_string());
+                    map.insert(pane_id.to_string(), note.to_string());
                 }
             }
         }
