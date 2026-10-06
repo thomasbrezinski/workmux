@@ -228,7 +228,11 @@ fn process_event(
         AppEvent::Input(Event::Mouse(mouse)) => {
             match mouse.kind {
                 MouseEventKind::Down(MouseButton::Left) => {
-                    if let Some(idx) = app.hit_test(mouse.column, mouse.row) {
+                    // Clicking the note line opens the linked Obsidian note;
+                    // clicking anywhere else on a row jumps to that agent's pane.
+                    if let Some(idx) = app.hit_test_note(mouse.column, mouse.row) {
+                        app.open_note(idx);
+                    } else if let Some(idx) = app.hit_test(mouse.column, mouse.row) {
                         app.select_index(idx);
                         app.jump_to_selected();
                     }

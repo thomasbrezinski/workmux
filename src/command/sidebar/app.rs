@@ -24,7 +24,7 @@ use crate::multiplexer::{AgentPane, Multiplexer};
 use crate::ui::theme::ThemePalette;
 
 use super::snapshot::SidebarSnapshot;
-use super::template::parser::{ParseError, Token, parse_line};
+use super::template::parser::{ParseError, Token, TokenId, parse_line};
 
 /// Sidebar layout mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -167,6 +167,8 @@ pub struct SidebarApp {
     pub list_area: Rect,
     /// Window prefix from config
     window_prefix: String,
+    /// Obsidian vault name from config, for click-to-open note links. None disables it.
+    obsidian_vault: Option<String>,
     /// The sidebar's own host session (immutable, detected once at startup via TMUX_PANE)
     host_session: Option<String>,
     /// Stable tmux window ID (e.g., @42) for active-window detection
@@ -323,6 +325,7 @@ impl SidebarApp {
             layout_mode: SidebarLayoutMode::default(),
             list_area: Rect::default(),
             window_prefix,
+            obsidian_vault: config.obsidian_vault.clone(),
             host_session,
             host_window_id,
             host_agent_idx: None,
@@ -589,6 +592,80 @@ impl SidebarApp {
                 None
             }
         }
+    }
+
+    /// Content-line index (among rendered, non-blank tile templates) of the
+    /// `{note}` line, if the tile layout has one.
+    fn note_content_line(&self) -> Option<usize> {
+        let mut content_idx = 0;
+        for tmpl in &self.templates.tiles {
+            if super::template::layout::is_blank_template_line(tmpl) {
+                continue;
+            }
+            if tmpl.iter().any(|t| matches!(t, Token::Field(TokenId::Note))) {
+                return Some(content_idx);
+            }
+            content_idx += 1;
+        }
+        None
+    }
+
+    /// If (column, row) falls on an agent's note line (Tiles mode) and that agent
+    /// has a linked note, return its index. Used to open the note on click.
+    pub fn hit_test_note(&self, _column: u16, row: u16) -> Option<usize> {
+        if !matches!(self.layout_mode, SidebarLayoutMode::Tiles) {
+            return None;
+        }
+        let note_line = self.note_content_line()?;
+        let area = self.list_area;
+        if row < area.y || row >= area.y + area.height {
+            return None;
+        }
+        let relative_row = (row - area.y) as usize;
+        let offset = self.list_state.offset();
+        let mut y = 0;
+        for idx in offset..self.agents.len() {
+            let h = self.tile_item_height(idx);
+            if relative_row < y + h {
+                let sep = usize::from(idx > 0);
+                let content_line = (relative_row - y).checked_sub(sep)?;
+                if content_line == note_line
+                    && self.agents.get(idx).and_then(|a| a.note.as_ref()).is_some()
+                {
+                    return Some(idx);
+                }
+                return None;
+            }
+            y += h;
+        }
+        None
+    }
+
+    /// Open the linked Obsidian note for `idx` via `obsidian://` (best-effort;
+    /// needs `obsidian_vault` configured). Spawns detached and ignores failures.
+    pub fn open_note(&self, idx: usize) {
+        let (Some(agent), Some(vault)) = (self.agents.get(idx), self.obsidian_vault.as_deref())
+        else {
+            return;
+        };
+        let Some(note) = agent.note.as_deref().filter(|n| !n.is_empty()) else {
+            return;
+        };
+        let vault_enc =
+            percent_encoding::utf8_percent_encode(vault, percent_encoding::NON_ALPHANUMERIC);
+        let file_enc =
+            percent_encoding::utf8_percent_encode(note, percent_encoding::NON_ALPHANUMERIC);
+        let uri = format!("obsidian://open?vault={}&file={}", vault_enc, file_enc);
+        let opener = if cfg!(target_os = "macos") {
+            "open"
+        } else {
+            "xdg-open"
+        };
+        let _ = std::process::Command::new(opener)
+            .arg(&uri)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
     }
 
     pub fn ensure_selected_visible(&mut self, visible_count: usize) {

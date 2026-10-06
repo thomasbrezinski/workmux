@@ -419,6 +419,11 @@ pub struct Config {
     #[serde(default)]
     pub window_prefix: Option<String>,
 
+    /// Obsidian vault name, used to build `obsidian://open?vault=...` links when
+    /// clicking a linked note in the sidebar. Click-to-open is disabled when unset.
+    #[serde(default)]
+    pub obsidian_vault: Option<String>,
+
     /// Tmux pane configuration (single window layout, mutually exclusive with `windows`)
     #[serde(default)]
     pub panes: Option<Vec<PaneConfig>>,
