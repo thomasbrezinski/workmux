@@ -247,6 +247,7 @@ impl SidebarApp {
             layout_mode: SidebarLayoutMode::Compact,
             list_area: Rect::default(),
             window_prefix: "wm-".to_string(),
+            obsidian_vault: None,
             host_session: None,
             host_window_id: None,
             host_agent_idx: None,
@@ -789,7 +790,6 @@ impl SidebarApp {
                     self.pending_resize_cols = None;
                     self.pending_resize_rows = None;
                     self.resize_deadline = None;
-                    let _ = super::reflow_all_to_window_extent(Some(window_w));
                     return;
                 }
                 self.pending_resize_cols = Some(cols);
@@ -801,7 +801,6 @@ impl SidebarApp {
                     self.pending_resize_cols = None;
                     self.pending_resize_rows = None;
                     self.resize_deadline = None;
-                    let _ = super::reflow_all_to_window_extent(Some(window_h));
                     return;
                 }
                 self.pending_resize_rows = Some(rows);
@@ -851,10 +850,7 @@ impl SidebarApp {
                 let expected = super::effective_width_for(&config, window_w);
                 let delta = (actual_width as i16 - expected as i16).abs();
                 if delta > 0 {
-                    super::set_sidebar_width(actual_width);
-                    if let Some(wid) = self.host_window_id() {
-                        super::reflow_all_sidebars_except(wid);
-                    }
+                    self.apply_size_mismatch(actual_width, super::set_sidebar_width);
                 }
             }
             SidebarPosition::Top => {
@@ -876,12 +872,28 @@ impl SidebarApp {
                 let expected = super::effective_height_for(&config, window_h);
                 let delta = (actual_height as i16 - expected as i16).abs();
                 if delta > 0 {
-                    super::set_sidebar_height(actual_height);
-                    if let Some(wid) = self.host_window_id() {
-                        super::reflow_all_sidebars_except(wid);
-                    }
+                    self.apply_size_mismatch(actual_height, super::set_sidebar_height);
                 }
             }
+        }
+    }
+
+    /// Handle a sidebar whose size differs from the synced size.
+    ///
+    /// Only a sidebar in a window someone is looking at can have been dragged
+    /// by the user, so only that one may publish its size to every other
+    /// sidebar. A hidden sidebar that's off-size was left that way by a
+    /// racing reflow; publishing it would make sidebars overwrite each
+    /// other's width in a loop. Snap it back to the synced size instead.
+    fn apply_size_mismatch(&self, actual: u16, publish: fn(u16)) {
+        let Some(wid) = self.host_window_id() else {
+            return;
+        };
+        if host_window_visible() {
+            publish(actual);
+            super::reflow_all_sidebars_except(wid);
+        } else {
+            let _ = super::reflow(Some(wid));
         }
     }
 
@@ -1035,6 +1047,22 @@ fn query_window_width_for_pane() -> Option<u16> {
         .run_and_capture_stdout()
         .ok()
         .and_then(|s| s.trim().parse().ok())
+}
+
+/// Whether any attached client is currently showing this sidebar's window.
+fn host_window_visible() -> bool {
+    let pane_id = std::env::var("TMUX_PANE").unwrap_or_default();
+    let mut args = vec!["display-message", "-p"];
+    if !pane_id.is_empty() {
+        args.extend_from_slice(&["-t", &pane_id]);
+    }
+    args.push("#{window_active_clients}");
+    Cmd::new("tmux")
+        .args(&args)
+        .run_and_capture_stdout()
+        .ok()
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .is_some_and(|n| n > 0)
 }
 
 fn query_window_height_for_pane() -> Option<u16> {

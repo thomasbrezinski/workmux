@@ -378,22 +378,6 @@ pub(super) fn reflow_after_sidebar_add(
     position: SidebarPosition,
     sidebar_size: u16,
 ) {
-    reflow_after_sidebar_add_to_window_extent(
-        window_id,
-        sidebar_pane_id,
-        position,
-        sidebar_size,
-        None,
-    );
-}
-
-pub(super) fn reflow_after_sidebar_add_to_window_extent(
-    window_id: &str,
-    sidebar_pane_id: &str,
-    position: SidebarPosition,
-    sidebar_size: u16,
-    window_extent: Option<u16>,
-) {
     let layout_str = match Cmd::new("tmux")
         .args(&["display-message", "-t", window_id, "-p", "#{window_layout}"])
         .run_and_capture_stdout()
@@ -459,13 +443,6 @@ pub(super) fn reflow_after_sidebar_add_to_window_extent(
         "reflow: found sidebar"
     );
 
-    if let Some(extent) = window_extent {
-        match axis {
-            Axis::Horizontal => rect.w = extent,
-            Axis::Vertical => rect.h = extent,
-        }
-    }
-
     let root_pos = rect_pos(rect, axis);
     match axis {
         Axis::Horizontal => {
@@ -508,8 +485,13 @@ pub(super) fn reflow_after_sidebar_add_to_window_extent(
         pos = pos.saturating_add(new_len).saturating_add(1);
     }
 
-    // Apply the rebalanced layout
+    // Apply the rebalanced layout, skipping select-layout when nothing changed
+    // (avoids needless SIGWINCH to every pane in the window).
     let new_layout = serialize_layout(&root);
+    if new_layout == layout_str {
+        debug!(window_id, "reflow: layout already matches");
+        return;
+    }
     debug!(
         window_id,
         old = layout_str.as_str(),

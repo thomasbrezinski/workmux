@@ -214,12 +214,16 @@ pub(super) fn list_sidebar_panes() -> Vec<(String, String)> {
         .run_and_capture_stdout()
         .unwrap_or_default();
 
+    // `list-panes -a` lists each window once per session it's linked into, so
+    // grouped sessions (`tmux new-session -t main`) repeat every sidebar.
+    // Dedupe by pane ID so callers don't reflow or kill the same pane N times.
+    let mut seen = std::collections::HashSet::new();
     output
         .lines()
         .filter_map(|line| {
             let (window_id, rest) = line.split_once(' ')?;
             let (pane_id, role) = rest.split_once(' ')?;
-            (role.trim() == SIDEBAR_ROLE_VALUE)
+            (role.trim() == SIDEBAR_ROLE_VALUE && seen.insert(pane_id.to_string()))
                 .then(|| (window_id.to_string(), pane_id.to_string()))
         })
         .collect()

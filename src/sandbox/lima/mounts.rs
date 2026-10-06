@@ -381,7 +381,7 @@ mod tests {
     fn test_lima_state_dir_path_format() {
         let path = lima_state_dir_path("wm-myproject-abc12345").unwrap();
         // Should end with the expected suffix regardless of XDG_STATE_HOME
-        assert!(path.ends_with("workmux/lima/wm-myproject-abc12345"));
+        assert!(path.ends_with("wmx/lima/wm-myproject-abc12345"));
     }
 
     #[test]
